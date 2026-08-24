@@ -102,7 +102,16 @@ add_custom_command(TARGET ZZUAssistant POST_BUILD
                 $<TARGET_FILE_DIR:ZZUAssistant>/tool
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${CMAKE_CURRENT_SOURCE_DIR}/tool/course.py
-                $<TARGET_FILE_DIR:ZZUAssistant>/tool/course.py)
+                $<TARGET_FILE_DIR:ZZUAssistant>/tool/course.py
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md
+                $<TARGET_FILE_DIR:ZZUAssistant>/LICENSE.md
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/NOTICE
+                $<TARGET_FILE_DIR:ZZUAssistant>/NOTICE
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md
+                $<TARGET_FILE_DIR:ZZUAssistant>/THIRD_PARTY_NOTICES.md)
 
 # SSL_CERT_FILE remains the runtime override. This optional build-time fallback
 # also supports manually supplied distributions whose CA path is not compiled in.

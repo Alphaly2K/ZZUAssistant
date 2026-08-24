@@ -1,7 +1,6 @@
 # ZZUAssistant
 
-ZZUAssistant 是一个面向郑州大学相关服务的跨平台命令行工具。项目使用
-C++23 编写主程序，通过编译期反射注册各项服务，并使用 Python 生成课程表
+ZZUAssistant 是一个面向郑州大学相关服务的跨平台命令行工具。项目使用 C++23 编写主程序，通过编译期反射注册各项服务，并使用 Python 生成课程表
 ICS 文件。
 
 > 本项目不是郑州大学官方软件。登录、充值等接口可能随学校系统更新而变化。
@@ -18,8 +17,7 @@ ICS 文件。
 - PowerShell、Bash、Zsh 和 Fish 命令补全
 - 多用户隔离：每个用户名对应独立哈希会话文件
 
-SSO、Portal 和超级 App 是三套相互独立的认证路径。校园卡、电费和课程表
-功能默认使用当前超级 App 用户。
+SSO、Portal 和超级 App 是三套相互独立的认证路径。校园卡、电费和课程表功能默认使用当前超级 App 用户。
 
 ## 构建
 
@@ -82,7 +80,7 @@ URL，便于程序读取。
 
 ### 电费自动充值
 
-macOS/Linux 等提供 `cron` 的系统可以使用仓库中的两个脚本：
+macOS/Linux 等提供 `cron` 的系统可以使用仓库中的两个示例脚本：
 
 ```bash
 bash ./scripts/electricity_setup.sh --bin /完整路径/ZZUAssistant
@@ -202,7 +200,15 @@ ZZUAssistant.exe app login <用户名>
 SSO Cookie、Portal 会话、超级 App JWT 和 eCard token 分开保存。用户会话文件
 使用用户名的 SHA-256 哈希作为文件名，切换当前用户不会复用其他用户的缓存。
 
-## 第三方组件
+## 许可证
 
-项目使用 Boost、OpenSSL、libpng，以及 MIT 许可的 Nayuki QR Code Generator。
-各组件版权和许可证归其原作者所有。
+除明确标记的第三方组件外，本项目使用 [PolyForm Noncommercial License 1.0.0](LICENSE.md)，仅授权非商业用途。该许可证属于源码可用许可证，不是 OSI 认可的开源许可证。版权通知见 [NOTICE](NOTICE)，
+第三方组件的版权和许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 致谢
+
+- [ZZU.Py](https://github.com/Illustar0/ZZU.Py)：为郑州大学相关认证、Portal、
+  校园卡和教务接口的实现提供了重要参考；该项目使用 MIT 许可证。
+- [Project Nayuki QR Code Generator](https://www.nayuki.io/page/qr-code-generator-library)：
+  提供终端二维码生成核心，使用 MIT 许可证。
+- Boost、OpenSSL、libpng 和 zlib：提供网络、密码学和图像处理基础能力。

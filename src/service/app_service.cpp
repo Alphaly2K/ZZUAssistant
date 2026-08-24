@@ -28,7 +28,8 @@ namespace zzu_assistant::services {
                     << " app logout [username]\n\n"
                     << cli::paint("NOTES", cli::Tone::yellow,
                                   context.color_enabled, true)
-                    << "\n  User defaults to the current App session; login uses phone-SMS MFA.\n";
+                    << "\n  User defaults to the current App session; login uses phone-SMS MFA.\n"
+                    << "  Set ZZUASSISTANT_APP_DEVICE_ID to reuse the phone device ID.\n";
         }
 
         std::string hidden_password(std::ostream &output) {

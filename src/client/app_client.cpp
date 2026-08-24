@@ -16,6 +16,7 @@
 #include <openssl/rsa.h>
 #include <openssl/ssl.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdlib>
@@ -266,7 +267,18 @@ namespace zzu_assistant::app {
                 if (options.username.empty() || options.password.empty())
                     throw std::runtime_error("Super App username and password are required");
                 load(options.username);
-                if (state_.get("deviceId", "").empty()) state_.put("deviceId", uuid_v4());
+                if (const auto configured = environment(
+                        model::app::SUPER_APP_DEVICE_ID_ENVIRONMENT.data())) {
+                    if (configured->empty() || configured->size() > 128 ||
+                        std::ranges::any_of(*configured, [](const unsigned char ch) {
+                            return ch <= 0x20 || ch >= 0x7f;
+                        }))
+                        throw std::runtime_error(
+                            "ZZUASSISTANT_APP_DEVICE_ID must be 1-128 printable ASCII characters without spaces");
+                    state_.put("deviceId", *configured);
+                } else if (state_.get("deviceId", "").empty()) {
+                    state_.put("deviceId", uuid_v4());
+                }
                 const auto key_response = token_request(model::app::SUPER_APP_PUBLIC_KEY_TARGET, http::verb::get);
                 if (key_response.status != 200) throw std::runtime_error("Cannot obtain Super App RSA public key");
                 const std::string username = rsa_encrypt(key_response.body, options.username);

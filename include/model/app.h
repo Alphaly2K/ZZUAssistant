@@ -17,6 +17,8 @@ namespace zzu_assistant::model::app {
     inline constexpr std::string_view SUPER_APP_CLIENT_ID = "CLIENT_ID";
     // Modify it as you wish.
     inline constexpr std::string_view SUPER_APP_OS_TYPE = "iOS";
+    inline constexpr std::string_view SUPER_APP_DEVICE_ID_ENVIRONMENT =
+            "ZZUASSISTANT_APP_DEVICE_ID";
     inline constexpr std::string_view SUPER_APP_PUBLIC_KEY_TARGET =
             "/jwt/publicKey";
     inline constexpr std::string_view SUPER_APP_MFA_DETECT_TARGET =

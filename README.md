@@ -46,32 +46,32 @@ cmake --build --preset vcpkg-release
 查看主帮助：
 
 ```text
-ZZUAssistant.exe help
+ZZUAssistant help
 ```
 
 ### 认证
 
 ```text
-ZZUAssistant.exe app login <用户名>
-ZZUAssistant.exe app logout [用户名]
+ZZUAssistant app login <用户名>
+ZZUAssistant app logout [用户名]
 
-ZZUAssistant.exe sso login <用户名> [--mfa phone|qr]
-ZZUAssistant.exe sso logout [用户名]
+ZZUAssistant sso login <用户名> [--mfa phone|qr]
+ZZUAssistant sso logout [用户名]
 
-ZZUAssistant.exe portal discover
-ZZUAssistant.exe portal login [用户名]
-ZZUAssistant.exe portal logout [用户名]
+ZZUAssistant portal discover
+ZZUAssistant portal login [用户名]
+ZZUAssistant portal logout [用户名]
 ```
 
 ### 校园卡和电费
 
 ```text
-ZZUAssistant.exe ecard balance [用户名] [--porcelain]
-ZZUAssistant.exe ecard recharge <金额> [用户名] [-y|--yes]
+ZZUAssistant ecard balance [用户名] [--porcelain]
+ZZUAssistant ecard recharge <金额> [用户名] [-y|--yes]
 
-ZZUAssistant.exe electricity setup [用户名]
-ZZUAssistant.exe electricity show [用户名] [--porcelain]
-ZZUAssistant.exe electricity recharge <lighting|air> <金额> [用户名]
+ZZUAssistant electricity setup [用户名]
+ZZUAssistant electricity show [用户名] [--porcelain]
+ZZUAssistant electricity recharge <lighting|air> <金额> [用户名]
 ```
 
 校园卡充值默认在终端显示支付二维码；使用 `--porcelain --yes` 时输出收银台
@@ -115,9 +115,9 @@ bash ./scripts/electricity_cron.sh --install   # 恢复任务
 ### 课程表
 
 ```text
-ZZUAssistant.exe course [用户名]
-ZZUAssistant.exe course --semester <current|学期ID|学期代码>
-ZZUAssistant.exe course --semester 2026-2027-1 -o schedule.ics
+ZZUAssistant course [用户名]
+ZZUAssistant course --semester <current|学期ID|学期代码>
+ZZUAssistant course --semester 2026-2027-1 -o schedule.ics
 ```
 
 课程表导出使用服务器提供的实际上课日期，因此能够保留调课、补课和周末课程。
@@ -125,10 +125,10 @@ ZZUAssistant.exe course --semester 2026-2027-1 -o schedule.ics
 ### 命令补全
 
 ```text
-ZZUAssistant.exe _completions powershell install <配置文件路径>
-ZZUAssistant.exe _completions bash install
-ZZUAssistant.exe _completions zsh install
-ZZUAssistant.exe _completions fish install
+ZZUAssistant _completions powershell install <配置文件路径>
+ZZUAssistant _completions bash install
+ZZUAssistant _completions zsh install
+ZZUAssistant _completions fish install
 ```
 
 ## 环境变量
@@ -149,7 +149,7 @@ ZZUAssistant.exe _completions fish install
 
 ```powershell
 $env:ZZUASSISTANT_ECARD_PAYMENT_PASSWORD = "校园卡支付密码"
-ZZUAssistant.exe electricity recharge lighting 10 --yes
+ZZUAssistant electricity recharge lighting 10 --yes
 Remove-Item Env:ZZUASSISTANT_ECARD_PAYMENT_PASSWORD
 ```
 
@@ -169,7 +169,7 @@ ZZUASSISTANT_ECARD_PAYMENT_PASSWORD='校园卡支付密码' \
 
 ```powershell
 $env:ZZUASSISTANT_APP_DEVICE_ID = "手机端的 deviceId"
-ZZUAssistant.exe app login <用户名>
+ZZUAssistant app login <用户名>
 ```
 
 设置值会保存到该用户独立的超级 App 会话中。后续未设置环境变量时仍会复用已

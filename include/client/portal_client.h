@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-// Client for WLAN portal authorizations.
+// Client for WLAN portal authentications.
 
 namespace zzu_assistant::portal {
     struct PortalInfo {

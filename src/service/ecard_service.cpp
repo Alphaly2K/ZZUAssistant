@@ -124,17 +124,28 @@ namespace zzu_assistant::services {
             if (command == "balance") {
                 if (porcelain)
                     context.out << std::format("balance_yuan={:.2f}\n", balance);
-                else
-                    context.out << "Campus card balance: "
-                            << std::format("{:.2f} yuan\n", balance);
+                else {
+                    cli::heading(context.out, "Campus card", "Balance",
+                                 context.color_enabled);
+                    cli::field(context.out, "User", username,
+                               context.color_enabled);
+                    cli::field(context.out, "Available",
+                               std::format("{:.2f} yuan", balance),
+                               context.color_enabled);
+                }
                 return 0;
             }
 
             client_.select_user(username);
-            if (!porcelain)
+            if (!porcelain) {
+                cli::heading(context.out, "Campus card", "Recharge order",
+                             context.color_enabled);
+                cli::field(context.out, "User", username,
+                           context.color_enabled);
                 cli::status(context.out, "INFO",
                             "Authorizing eCard for " + username,
                             cli::Tone::cyan, context.color_enabled);
+            }
             client_.authorize(app_state_.id_token(username));
             const auto config = client_.campus_card_recharge_config();
             if (config.amounts_yuan.empty())
@@ -155,12 +166,17 @@ namespace zzu_assistant::services {
             }
 
             if (!porcelain) {
-                context.out << std::format(
-                    "Campus card balance: {:.2f} yuan\nRecharge amount: {} yuan\n",
-                    balance, amount);
+                cli::field(context.out, "Balance",
+                           std::format("{:.2f} yuan", balance),
+                           context.color_enabled);
+                cli::field(context.out, "Recharge",
+                           std::format("{} yuan", amount),
+                           context.color_enabled);
                 if (!assume_yes) {
-                    context.out << "This creates a real payment order. Type RECHARGE "
-                            << amount << " to continue: " << std::flush;
+                    cli::prompt(context.out,
+                                "Create a real payment order",
+                                "type RECHARGE " + std::to_string(amount),
+                                context.color_enabled);
                     std::string confirmation;
                     std::getline(std::cin, confirmation);
                     if (confirmation != "RECHARGE " + std::to_string(amount)) {
@@ -181,7 +197,8 @@ namespace zzu_assistant::services {
             } else {
                 cli::status(context.out, "OK", "Payment order created",
                             cli::Tone::green, context.color_enabled);
-                context.out << "Scan with Alipay or WeChat to complete payment:\n";
+                cli::heading(context.out, "Scan to pay",
+                             "Alipay or WeChat", context.color_enabled);
                 cli::render_qr_text(context.out, order.checkout_url,
                                     context.color_enabled);
             }

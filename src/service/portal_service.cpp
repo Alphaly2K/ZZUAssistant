@@ -49,8 +49,9 @@ namespace zzu_assistant::services {
                     << "  Passwords are not saved.\n";
         }
 
-        std::string hidden_password(std::ostream &output) {
-            output << "Portal password: " << std::flush;
+        std::string hidden_password(std::ostream &output,
+                                    const bool color_enabled) {
+            cli::prompt(output, "Portal password", "hidden", color_enabled);
 #ifdef _WIN32
             std::string password;
             for (;;) {
@@ -119,8 +120,8 @@ namespace zzu_assistant::services {
                     throw std::invalid_argument(
                         "portal discover accepts only --porcelain");
                 if (!porcelain)
-                    cli::status(context.out, "INFO", "Detecting Portal interception",
-                                cli::Tone::cyan, context.color_enabled);
+                    cli::heading(context.out, "Campus Portal", "Detecting gateway",
+                                 context.color_enabled);
                 const portal::PortalInfo info = client_.discover();
                 if (porcelain) {
                     context.out << "auth_url=" << info.auth_url << '\n'
@@ -129,9 +130,12 @@ namespace zzu_assistant::services {
                 } else {
                     cli::status(context.out, "OK", "Campus Portal detected",
                                 cli::Tone::green, context.color_enabled);
-                    context.out << "Auth page:    " << info.auth_url << '\n'
-                            << "Portal server:" << ' ' << info.server_url << '\n'
-                            << "Client IPv4:  " << info.user_ip << '\n';
+                    cli::field(context.out, "Auth page", info.auth_url,
+                               context.color_enabled);
+                    cli::field(context.out, "Portal server", info.server_url,
+                               context.color_enabled);
+                    cli::field(context.out, "Client IPv4", info.user_ip,
+                               context.color_enabled);
                 }
                 return 0;
             }
@@ -189,6 +193,11 @@ namespace zzu_assistant::services {
             if (ip.empty()) {
                 ip = portal::PortalClient::local_ipv4();
             }
+            cli::heading(context.out, "Campus Portal",
+                         login ? "Sign in" : "Sign out",
+                         context.color_enabled);
+            cli::field(context.out, "User", username, context.color_enabled);
+            cli::field(context.out, "Client IPv4", ip, context.color_enabled);
             if (login && server.starts_with("http://")) {
                 cli::status(context.err, "WARN",
                             "Portal uses HTTP; Base64/XOR does not protect the password",
@@ -207,7 +216,8 @@ namespace zzu_assistant::services {
                             context.color_enabled);
                 return result.success ? 0 : 1;
             }
-            std::string password = hidden_password(context.out);
+            std::string password = hidden_password(context.out,
+                                                   context.color_enabled);
             try {
                 const portal::AuthResult result = client_.authenticate({
                     .server_url = server,

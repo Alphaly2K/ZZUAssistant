@@ -19,8 +19,9 @@
 
 namespace zzu_assistant::services {
     namespace {
-        [[nodiscard]] std::string read_hidden_password(std::ostream &output) {
-            output << "SSO password: " << std::flush;
+        [[nodiscard]] std::string read_hidden_password(
+            std::ostream &output, const bool color_enabled) {
+            cli::prompt(output, "SSO password", "hidden", color_enabled);
 #ifdef _WIN32
             std::string password;
             for (;;) {
@@ -109,9 +110,8 @@ namespace zzu_assistant::services {
                 usage(context);
                 return 2;
             }
-            context.out << cli::paint(model::constants::SSO_LOGOUT,
-                                      cli::Tone::cyan,
-                                      context.color_enabled, true) << '\n';
+            cli::heading(context.out, "Web SSO", "Sign out",
+                         context.color_enabled);
             const std::string_view username = arguments.empty()
                                                   ? std::string_view{}
                                                   : arguments.front();
@@ -169,7 +169,8 @@ namespace zzu_assistant::services {
             return 2;
         }
 
-        context.out << model::constants::SSO_LOGIN << '\n';
+        cli::heading(context.out, "Web SSO", "CAS sign in",
+                     context.color_enabled);
 
         std::string password;
         try {
@@ -184,6 +185,7 @@ namespace zzu_assistant::services {
             if (username.empty())
                 throw std::runtime_error(
                     "No current SSO user; provide a username for the first login");
+            cli::field(context.out, "User", username, context.color_enabled);
             std::string_view service_url;
             sso::MfaMethod mfa_method = sso::MfaMethod::secure_phone;
             for (std::size_t index = option_start; index < arguments.size(); ++index) {
@@ -225,7 +227,8 @@ namespace zzu_assistant::services {
                 cli::status(context.out, "SESSION", cached.message,
                             cli::Tone::green, context.color_enabled);
                 if (!cached.final_url.empty()) {
-                    context.out << "Final URL: " << cached.final_url << '\n';
+                    cli::field(context.out, "Final URL", cached.final_url,
+                               context.color_enabled);
                 }
                 return 0;
             }
@@ -236,7 +239,7 @@ namespace zzu_assistant::services {
                 return 1;
             }
 
-            password = read_hidden_password(context.out);
+            password = read_hidden_password(context.out, context.color_enabled);
             const sso::LoginOptions options{
                 .username = username,
                 .password = password,
@@ -247,7 +250,10 @@ namespace zzu_assistant::services {
                                 cli::Tone::cyan, context.color_enabled);
                 },
                 .prompt = [&](const std::string_view prompt) {
-                    context.out << prompt << std::flush;
+                    cli::prompt(context.out, prompt.ends_with(": ")
+                                                 ? prompt.substr(0, prompt.size() - 2)
+                                                 : prompt,
+                                "SMS", context.color_enabled);
                     std::string value;
                     if (!std::getline(std::cin, value)) {
                         throw std::runtime_error(
@@ -269,7 +275,8 @@ namespace zzu_assistant::services {
                 cli::status(context.out, "OK", result.message,
                             cli::Tone::green, context.color_enabled);
                 if (!result.final_url.empty()) {
-                    context.out << "Final URL: " << result.final_url << '\n';
+                    cli::field(context.out, "Final URL", result.final_url,
+                               context.color_enabled);
                 }
                 return 0;
             }

@@ -4,8 +4,6 @@
 #include <string>
 #include <string_view>
 
-// Stdout styles modification
-
 namespace zzu_assistant::cli {
     enum class Tone { normal, muted, cyan, green, yellow, red };
 
@@ -16,4 +14,13 @@ namespace zzu_assistant::cli {
 
     void status(std::ostream &output, std::string_view label,
                 std::string_view message, Tone tone, bool enabled);
+
+    void heading(std::ostream &output, std::string_view title,
+                 std::string_view subtitle, bool enabled);
+
+    void field(std::ostream &output, std::string_view label,
+               std::string_view value, bool enabled);
+
+    void prompt(std::ostream &output, std::string_view message,
+                std::string_view hint, bool enabled);
 } // namespace zzu_assistant::cli

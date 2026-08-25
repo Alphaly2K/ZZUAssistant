@@ -34,8 +34,8 @@ namespace zzu_assistant::services {
                     << "  Set ZZUASSISTANT_APP_DEVICE_ID to reuse the phone device ID.\n";
         }
 
-        std::string hidden_password(std::ostream &output) {
-            output << "Super App password: " << std::flush;
+        std::string hidden_password(std::ostream &output, const bool color_enabled) {
+            cli::prompt(output, "Super App password", "hidden", color_enabled);
 #ifdef _WIN32
             std::string value;
             for (;;) {
@@ -70,9 +70,8 @@ namespace zzu_assistant::services {
         }
         const std::string_view action = arguments.front();
         if (action == "logout") {
-            context.out << cli::paint(model::constants::APP_LOGOUT,
-                                      cli::Tone::cyan,
-                                      context.color_enabled, true) << '\n';
+            cli::heading(context.out, "Super App", "Sign out",
+                         context.color_enabled);
             if (arguments.size() > 2) {
                 usage(context);
                 return 2;
@@ -89,7 +88,8 @@ namespace zzu_assistant::services {
             return 2;
         }
         std::string password;
-        context.out << cli::paint(model::constants::APP_LOGIN, cli::Tone::cyan, true) << '\n';
+        cli::heading(context.out, "Super App", "Phone-SMS sign in",
+                     context.color_enabled);
         try {
             std::string username;
             if (arguments.size() == 2) username = arguments[1];
@@ -97,14 +97,18 @@ namespace zzu_assistant::services {
             if (username.empty())
                 throw std::runtime_error(
                     "No current Super App user; provide a username for the first login");
-            password = hidden_password(context.out);
+            cli::field(context.out, "User", username, context.color_enabled);
+            password = hidden_password(context.out, context.color_enabled);
             const auto result = client_.login({
                 .username = username, .password = password,
                 .notify = [&](const std::string_view message) {
                     cli::status(context.out, "MFA", message, cli::Tone::cyan, context.color_enabled);
                 },
                 .prompt = [&](const std::string_view prompt) {
-                    context.out << prompt << std::flush;
+                    cli::prompt(context.out, prompt.ends_with(": ")
+                                                 ? prompt.substr(0, prompt.size() - 2)
+                                                 : prompt,
+                                "SMS", context.color_enabled);
                     std::string code;
                     if (!std::getline(std::cin, code)) throw std::runtime_error("Cannot read phone code");
                     return code;

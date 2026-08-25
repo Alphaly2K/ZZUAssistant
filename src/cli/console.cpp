@@ -74,7 +74,44 @@ namespace zzu_assistant::cli {
     void status(std::ostream &output, const std::string_view label,
                 const std::string_view message, const Tone tone,
                 const bool enabled) {
-        output << paint("[" + std::string(label) + "]", tone, enabled, true)
-                << ' ' << message << '\n';
+        if (!enabled) {
+            output << '[' << label << "] " << message << '\n';
+            return;
+        }
+        const std::string_view marker = tone == Tone::green ? "✓" :
+                                        tone == Tone::red ? "✗" :
+                                        tone == Tone::yellow ? "!" : "›";
+        output << paint(marker, tone, true, true) << ' '
+                << paint(label, tone, true, true) << "  " << message << '\n';
+    }
+
+    void heading(std::ostream &output, const std::string_view title,
+                 const std::string_view subtitle, const bool enabled) {
+        if (!enabled) {
+            output << title;
+            if (!subtitle.empty()) output << " — " << subtitle;
+            output << '\n';
+            return;
+        }
+        output << paint("╭─", Tone::cyan, true, true) << ' '
+                << paint(title, Tone::cyan, true, true) << '\n';
+        if (!subtitle.empty())
+            output << paint("╰─", Tone::muted, true) << ' '
+                    << paint(subtitle, Tone::muted, true) << '\n';
+    }
+
+    void field(std::ostream &output, const std::string_view label,
+               const std::string_view value, const bool enabled) {
+        output << "  " << paint(label, Tone::muted, enabled) << "  "
+                << value << '\n';
+    }
+
+    void prompt(std::ostream &output, const std::string_view message,
+                const std::string_view hint, const bool enabled) {
+        output << paint("?", Tone::cyan, enabled, true) << ' ' << message;
+        if (!hint.empty())
+            output << ' ' << paint("[" + std::string(hint) + "]",
+                                   Tone::muted, enabled);
+        output << ": " << std::flush;
     }
 } // namespace zzu_assistant::cli

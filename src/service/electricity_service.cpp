@@ -65,8 +65,10 @@ namespace zzu_assistant::services {
             return *current;
         }
 
-        std::string hidden_payment_password(std::ostream &output) {
-            output << "eCard payment password: " << std::flush;
+        std::string hidden_payment_password(std::ostream &output,
+                                            const bool color_enabled) {
+            cli::prompt(output, "eCard payment password", "hidden",
+                        color_enabled);
 #ifdef _WIN32
             std::string password;
             for (;;) {
@@ -142,21 +144,25 @@ namespace zzu_assistant::services {
                 visible[index] = index;
 
             for (;;) {
-                context.out << '\n'
-                        << cli::paint(std::format("{} / {}", profile, type),
-                                      cli::Tone::cyan, context.color_enabled, true)
-                        << '\n';
+                context.out << '\n';
+                cli::heading(context.out, std::format("{} / {}", profile, type),
+                             "Choose a location", context.color_enabled);
                 if (visible.size() <= 20) {
                     for (std::size_t index = 0; index < visible.size(); ++index) {
-                        context.out << "  " << index + 1 << ") "
+                        context.out << "  "
+                                << cli::paint(std::format("{:>2}", index + 1),
+                                              cli::Tone::cyan,
+                                              context.color_enabled, true)
+                                << "  "
                                 << options[visible[index]].name << '\n';
                     }
-                    context.out << "Select a number or enter an exact name: ";
+                    cli::prompt(context.out, "Selection", "number or name",
+                                context.color_enabled);
                 } else {
-                    context.out << visible.size()
-                            << " choices. Enter the exact name or a search term: ";
+                    cli::prompt(context.out,
+                                std::format("Search {} choices", visible.size()),
+                                "exact name or keyword", context.color_enabled);
                 }
-                context.out << std::flush;
 
                 std::string input;
                 if (!std::getline(std::cin, input))
@@ -216,17 +222,16 @@ namespace zzu_assistant::services {
 
         void print_reading(ServiceContext &context, const std::string_view label,
                            const ecard::ElectricityReading &reading) {
-            context.out << "  " << cli::paint(label, cli::Tone::green,
-                                              context.color_enabled, true)
-                    << ": " << std::format("{:.2f} kWh", reading.quantity_kwh);
+            std::string value = std::format("{:.2f} kWh", reading.quantity_kwh);
             if (reading.price_yuan_per_kwh > 0)
-                context.out << std::format("  ({:.2f} yuan/kWh)",
-                                           reading.price_yuan_per_kwh);
-            context.out << '\n';
+                value += std::format("  ·  {:.2f} yuan/kWh",
+                                     reading.price_yuan_per_kwh);
+            cli::field(context.out, label, value, context.color_enabled);
         }
 
         bool confirm(ServiceContext &context) {
-            context.out << "Save these two electricity profiles? [y/N]: " << std::flush;
+            cli::prompt(context.out, "Save both electricity profiles", "y/N",
+                        context.color_enabled);
             std::string answer;
             if (!std::getline(std::cin, answer)) return false;
             answer = ascii_lower(answer);
@@ -322,9 +327,17 @@ namespace zzu_assistant::services {
             const std::string username = resolve_username(app_state_, supplied_username);
 
             client_.select_user(username);
-            if (!porcelain)
+            if (!porcelain) {
+                const std::string_view subtitle = recharge ? "Recharge" :
+                                                  command == "show" ? "Balance" :
+                                                  "Room setup";
+                cli::heading(context.out, "Electricity", subtitle,
+                             context.color_enabled);
+                cli::field(context.out, "User", username,
+                           context.color_enabled);
                 cli::status(context.out, "INFO", "Authorizing eCard for " + username,
                             cli::Tone::cyan, context.color_enabled);
+            }
             client_.authorize(app_state_.id_token(username));
 
             if (recharge) {
@@ -338,19 +351,26 @@ namespace zzu_assistant::services {
                 if (!std::isfinite(card_balance) || card_balance < 0)
                     throw std::runtime_error("Campus card balance response is invalid");
                 const auto before = client_.account(profile);
-                context.out << "Campus card balance: "
-                        << std::format("{:.2f} yuan\n", card_balance);
+                cli::field(context.out, "Card balance",
+                           std::format("{:.2f} yuan", card_balance),
+                           context.color_enabled);
                 print_reading(context, meter == "lighting" ? "Lighting current" : "Air current", before);
                 if (card_balance + 0.0001 < static_cast<double>(amount))
                     throw std::runtime_error(std::format(
                         "Insufficient campus card balance: {:.2f} yuan available, {} yuan required",
                         card_balance, amount));
-                context.out << "\nRecharge target: " << (meter == "lighting" ? "Lighting" : "Air conditioning")
-                        << "\nAmount: " << amount << " yuan\n"
-                        << "Room ID: " << profile.room << "\n";
+                cli::field(context.out, "Target",
+                           meter == "lighting" ? "Lighting" : "Air conditioning",
+                           context.color_enabled);
+                cli::field(context.out, "Amount",
+                           std::format("{} yuan", amount),
+                           context.color_enabled);
+                cli::field(context.out, "Room ID", profile.room,
+                           context.color_enabled);
                 if (!assume_yes) {
-                    context.out << "This will submit a real payment. Type RECHARGE " << amount
-                            << " to continue: " << std::flush;
+                    cli::prompt(context.out, "Submit a real payment",
+                                "type RECHARGE " + std::to_string(amount),
+                                context.color_enabled);
                     std::string confirmation;
                     std::getline(std::cin, confirmation);
                     if (confirmation != "RECHARGE " + std::to_string(amount)) {
@@ -368,7 +388,8 @@ namespace zzu_assistant::services {
                             *payment_password_environment));
                     payment_password = std::move(*supplied);
                 } else {
-                    payment_password = hidden_payment_password(context.out);
+                    payment_password = hidden_payment_password(
+                        context.out, context.color_enabled);
                 }
                 try {
                     const auto result = client_.recharge(
@@ -409,17 +430,18 @@ namespace zzu_assistant::services {
                 return 0;
             }
 
-            context.out
-                    << "Configure the lighting meter first. Select the level whose "
-                    "server label means lighting electricity.\n";
+            cli::status(context.out, "STEP", "Configure the lighting meter first",
+                        cli::Tone::cyan, context.color_enabled);
+            context.out << "  Select the server level that represents lighting electricity.\n";
             ecard::ElectricityProfiles profiles;
             profiles.lighting = configure_profile(context, client_, "Lighting");
             const auto lighting = client_.account(profiles.lighting);
             print_reading(context, "Lighting check", lighting);
 
-            context.out
-                    << "\nNow configure the air-conditioning meter. Select the "
-                    "level whose server label means air-conditioning electricity.\n";
+            context.out << '\n';
+            cli::status(context.out, "STEP", "Configure the air-conditioning meter",
+                        cli::Tone::cyan, context.color_enabled);
+            context.out << "  Select the server level that represents air-conditioning electricity.\n";
             profiles.air_conditioning =
                     configure_profile(context, client_, "Air conditioning");
             const auto air = client_.account(profiles.air_conditioning);

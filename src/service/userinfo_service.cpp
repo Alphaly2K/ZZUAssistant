@@ -81,14 +81,23 @@ namespace zzu_assistant::services {
                 value(context.out, "uid", info.uid);
                 context.out << "expires_at=" << info.expires_at << '\n';
             } else {
-                cli::status(context.out, "OK", "SSO identity verified",
+                cli::heading(context.out, "User information",
+                             "Verified through Web SSO",
+                             context.color_enabled);
+                cli::status(context.out, "OK", "CAS identity ticket accepted",
                             cli::Tone::green, context.color_enabled);
-                context.out << "Username:      " << info.username << '\n'
-                        << "Name:          " << info.name << '\n'
-                        << "Identity:      " << info.identity_type_name
-                        << " (" << info.identity_type_code << ")\n"
-                        << "Organization:  " << info.organization_name
-                        << " (" << info.organization_code << ")\n";
+                cli::field(context.out, "Username", info.username,
+                           context.color_enabled);
+                cli::field(context.out, "Name", info.name,
+                           context.color_enabled);
+                cli::field(context.out, "Identity",
+                           info.identity_type_name + " (" +
+                           info.identity_type_code + ")",
+                           context.color_enabled);
+                cli::field(context.out, "Organization",
+                           info.organization_name + " (" +
+                           info.organization_code + ")",
+                           context.color_enabled);
             }
             return 0;
         } catch (const std::exception &error) {

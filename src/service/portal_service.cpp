@@ -1,5 +1,6 @@
 #include "service/portal_service.h"
 
+#include "auth/environment.h"
 #include "cli/console.h"
 #include "model/portal.h"
 
@@ -44,7 +45,8 @@ namespace zzu_assistant::services {
                     << "  --porcelain     Machine-readable discover output.\n\n"
                     << cli::paint("NOTES", cli::Tone::yellow,
                                   context.color_enabled, true)
-                    << "\n  User defaults to the current Portal session; passwords are not saved.\n";
+                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved Portal user.\n"
+                    << "  Passwords are not saved.\n";
         }
 
         std::string hidden_password(std::ostream &output) {
@@ -145,6 +147,8 @@ namespace zzu_assistant::services {
             if (arguments.size() > 1 && !arguments[1].starts_with('-')) {
                 username = arguments[1];
                 option_start = 2;
+            } else if (const auto configured = auth::current_user_override()) {
+                username = *configured;
             }
             std::string server(model::portal::DEFAULT_SERVER_URL);
             std::string ip;

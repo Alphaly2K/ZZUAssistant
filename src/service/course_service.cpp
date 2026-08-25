@@ -43,7 +43,8 @@ namespace zzu_assistant::services {
                     << "  --porcelain         Machine-readable key=value output.\n\n"
                     << cli::paint("NOTES", cli::Tone::yellow,
                                   context.color_enabled, true)
-                    << "\n  User defaults to the current Super App session. Requires Python 3.\n";
+                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved App user.\n"
+                    << "  ZZUASSISTANT_APP_TOKEN supplies auth for this process. Requires Python 3.\n";
         }
 
         std::optional<std::string> environment(const char *name) {

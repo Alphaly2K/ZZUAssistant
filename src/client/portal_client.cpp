@@ -1,5 +1,6 @@
 #include "client/portal_client.h"
 
+#include "auth/environment.h"
 #include "model/portal.h"
 
 #include <boost/asio/connect.hpp>
@@ -55,42 +56,11 @@ namespace zzu_assistant::portal {
         };
 
         std::optional<std::string> environment(const char *name) {
-#ifdef _WIN32
-            char *value = nullptr;
-            std::size_t size = 0;
-            if (_dupenv_s(&value, &size, name) != 0 || !value)
-                return std::nullopt;
-            std::string result(value);
-            std::free(value);
-            return result;
-#else
-            if (const char *value = std::getenv(name)) return std::string(value);
-            return std::nullopt;
-#endif
+            return auth::environment(name);
         }
 
         std::filesystem::path portal_session_file() {
-            if (const auto value = environment("ZZUASSISTANT_STATE_DIR");
-                value && !value->empty())
-                return std::filesystem::path(*value) / "current-portal-user.db";
-#ifdef _WIN32
-            if (const auto value = environment("LOCALAPPDATA"))
-                return std::filesystem::path(*value) / "ZZUAssistant" /
-                       "current-portal-user.db";
-#elif defined(__APPLE__)
-            if (const auto value = environment("HOME"))
-                return std::filesystem::path(*value) / "Library" /
-                       "Application Support" / "ZZUAssistant" /
-                       "current-portal-user.db";
-#else
-            if (const auto value = environment("XDG_STATE_HOME"))
-                return std::filesystem::path(*value) / "zzu-assistant" /
-                       "current-portal-user.db";
-            if (const auto value = environment("HOME"))
-                return std::filesystem::path(*value) / ".local/state/zzu-assistant" /
-                       "current-portal-user.db";
-#endif
-            throw std::runtime_error("Cannot determine the Portal state directory");
+            return auth::state_directory() / "current-portal-user.db";
         }
 
         void save_portal_session(const CachedSession &session) {

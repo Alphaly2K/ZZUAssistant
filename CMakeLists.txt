@@ -59,6 +59,8 @@ add_executable(ZZUAssistant src/main.cpp
         src/service/course_service.cpp
         src/service/ecard_service.cpp
         src/service/electricity_service.cpp
+        src/client/userinfo_client.cpp
+        src/service/userinfo_service.cpp
         src/registry.cpp
         include/service/service.h
         include/service/echo_service.h
@@ -73,6 +75,9 @@ add_executable(ZZUAssistant src/main.cpp
         include/service/course_service.h
         include/service/ecard_service.h
         include/service/electricity_service.h
+        include/client/userinfo_client.h
+        include/service/userinfo_service.h
+        include/auth/environment.h
         include/cli/console.h
         include/cli/qr_renderer.h
         include/third_party/qrcodegen.hpp
@@ -82,7 +87,8 @@ add_executable(ZZUAssistant src/main.cpp
         include/model/constants.h
         include/model/app.h
         include/model/ecard.h
-        include/model/electricity.h)
+        include/model/electricity.h
+        include/model/userinfo.h)
 
 target_include_directories(ZZUAssistant PRIVATE include)
 target_link_libraries(ZZUAssistant PRIVATE

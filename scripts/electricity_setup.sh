@@ -150,7 +150,7 @@ trap cleanup EXIT
 
 {
     printf 'ZZUASSISTANT_BIN=%q\n' "$assistant_bin"
-    printf 'ZZUASSISTANT_USERNAME=%q\n' "$username"
+    printf 'ZZUASSISTANT_USER=%q\n' "$username"
     printf 'ZZU_ELECTRICITY_THRESHOLD_YUAN=%q\n' "$threshold"
     printf 'ZZU_ELECTRICITY_RECHARGE_YUAN=%q\n' "$recharge_amount"
     printf 'ZZU_CRON_INTERVAL_MINUTES=%q\n' "$interval"

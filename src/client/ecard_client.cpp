@@ -1,5 +1,6 @@
 #include "client/ecard_client.h"
 
+#include "auth/environment.h"
 #include "model/app.h"
 
 #include <boost/asio/connect.hpp>
@@ -50,40 +51,11 @@ namespace zzu_assistant::ecard {
         };
 
         std::optional<std::string> environment(const char *name) {
-#ifdef _WIN32
-            char *value = nullptr;
-            std::size_t size = 0;
-            if (_dupenv_s(&value, &size, name) != 0 || value == nullptr) {
-                return std::nullopt;
-            }
-            std::string result(value);
-            std::free(value);
-            return result;
-#else
-    if (const char* value = std::getenv(name)) return std::string(value);
-    return std::nullopt;
-#endif
+            return auth::environment(name);
         }
 
         std::filesystem::path state_directory() {
-            if (const auto configured = environment("ZZUASSISTANT_STATE_DIR");
-                configured && !configured->empty())
-                return *configured;
-#ifdef _WIN32
-            if (const auto value = environment("LOCALAPPDATA"))
-                return std::filesystem::path(*value) / "ZZUAssistant";
-#elif defined(__APPLE__)
-    if (const auto value = environment("HOME"))
-        return std::filesystem::path(*value) / "Library" /
-               "Application Support" / "ZZUAssistant";
-#else
-    if (const auto value = environment("XDG_STATE_HOME"))
-        return std::filesystem::path(*value) / "zzu-assistant";
-    if (const auto value = environment("HOME"))
-        return std::filesystem::path(*value) / ".local" / "state" /
-               "zzu-assistant";
-#endif
-            throw std::runtime_error("Cannot determine the eCard state directory");
+            return auth::state_directory();
         }
 
         std::string user_key(const std::string_view username) {
@@ -415,6 +387,7 @@ namespace zzu_assistant::ecard {
 
         void select_user(const std::string_view username) {
             if (username.empty()) throw std::invalid_argument("Username is required");
+            environment_credentials_ = false;
             username_ = username;
             file_ = state_directory() / "sessions" /
                     (user_key(username) + ".ecard.db");
@@ -477,18 +450,32 @@ namespace zzu_assistant::ecard {
         }
 
         void authorize(const std::string_view super_app_id_token) {
-            if (const auto token = environment("ZZUASSISTANT_ECARD_ACCESS_TOKEN");
-                token && !token->empty()) {
+            if (const auto token = auth::environment(auth::ECARD_TOKEN_ENV)) {
+                auth::validate_header_value(*token, auth::ECARD_TOKEN_ENV);
                 state_.put("accessToken", *token);
-                if (const auto refresh =
-                            environment("ZZUASSISTANT_ECARD_REFRESH_TOKEN");
-                    refresh && !refresh->empty()) {
+                if (const auto refresh = auth::environment(
+                        auth::ECARD_REFRESH_TOKEN_ENV)) {
+                    auth::validate_header_value(*refresh,
+                                                auth::ECARD_REFRESH_TOKEN_ENV);
                     state_.put("refreshToken", *refresh);
+                } else {
+                    state_.erase("refreshToken");
                 }
-                save();
+                environment_credentials_ = true;
                 return;
             }
-            if (!state_.get("accessToken", "").empty()) return;
+            const bool transient_app_credentials =
+                    auth::environment(auth::APP_TOKEN_ENV).has_value();
+            if (transient_app_credentials) {
+                // A process-local App token must not reuse or overwrite the
+                // selected user's persistent eCard credentials.
+                state_.erase("accessToken");
+                state_.erase("refreshToken");
+                state_.erase("accessTokenExpire");
+                environment_credentials_ = true;
+            } else if (!state_.get("accessToken", "").empty()) {
+                return;
+            }
             if (super_app_id_token.empty())
                 throw std::runtime_error(
                     "No eCard token and no Super App idToken; run 'app login <username>' first");
@@ -513,7 +500,7 @@ namespace zzu_assistant::ecard {
             state_.put("accessToken", data.get<std::string>("accessToken"));
             state_.put("refreshToken", data.get<std::string>("refreshToken"));
             state_.put("accessTokenExpire", data.get("accessTokenExpire", ""));
-            save();
+            if (!environment_credentials_) save();
         }
 
         void refresh_access_token() {
@@ -538,7 +525,7 @@ namespace zzu_assistant::ecard {
             state_.put("accessToken", result.get<std::string>("accessToken"));
             state_.put("refreshToken", result.get("refreshToken", refresh));
             state_.put("accessTokenExpire", result.get("accessTokenExpire", ""));
-            save();
+            if (!environment_credentials_) save();
         }
 
         ptree protected_post_body(const std::string_view target,
@@ -830,6 +817,7 @@ namespace zzu_assistant::ecard {
         std::string username_;
         std::filesystem::path file_;
         ptree state_;
+        bool environment_credentials_{false};
     };
 
     EcardClient::EcardClient() : impl_(std::make_unique<Impl>()) {

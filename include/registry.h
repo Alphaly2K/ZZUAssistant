@@ -9,6 +9,7 @@
 #include "service/portal_service.h"
 #include "service/service.h"
 #include "service/sso_service.h"
+#include "service/userinfo_service.h"
 #include "model/constants.h"
 
 #include <boost/describe/class.hpp>
@@ -33,10 +34,11 @@ namespace zzu_assistant {
         services::SSOService sso;
         services::PortalService portal;
         services::AppService app;
+        services::UserInfoService userinfo;
         services::CompletionsService _completions;
 
         BOOST_DESCRIBE_CLASS(Registry, (), (), (),
-                             (echo, electricity, ecard, course, sso, portal, app,
+                             (echo, electricity, ecard, course, sso, portal, app, userinfo,
                               _completions))
     };
 } // namespace zzu_assistant

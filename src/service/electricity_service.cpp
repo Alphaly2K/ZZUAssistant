@@ -47,7 +47,10 @@ namespace zzu_assistant::services {
                     << "  --porcelain                   Machine-readable show output.\n\n"
                     << cli::paint("NOTES", cli::Tone::yellow,
                                   context.color_enabled, true)
-                    << "\n  User defaults to the current App session. With --yes, the password\n"
+                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved App user.\n"
+                    << "  ZZUASSISTANT_APP_TOKEN selects App auth;\n"
+                    << "  ZZUASSISTANT_ECARD_TOKEN overrides eCard auth.\n"
+                    << "  With --yes, the password\n"
                     << "  defaults to ZZUASSISTANT_ECARD_PAYMENT_PASSWORD and is not saved.\n";
         }
 

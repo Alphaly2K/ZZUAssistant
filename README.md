@@ -14,6 +14,7 @@ ICS 文件。
 - 校园卡余额查询、充值订单创建及终端支付二维码
 - 照明电费和空调电费房间配置、余额查询及充值
 - 教务系统课程表读取及 ICS 日历导出
+- 通过 Web SSO 获取当前用户身份与组织信息
 - PowerShell、Bash、Zsh 和 Fish 命令补全
 - 多用户隔离：每个用户名对应独立哈希会话文件
 
@@ -58,6 +59,7 @@ ZZUAssistant.exe app logout [用户名]
 
 ZZUAssistant.exe sso login <用户名> [--mfa phone|qr]
 ZZUAssistant.exe sso logout [用户名]
+ZZUAssistant.exe userinfo [用户名] [--porcelain]
 
 ZZUAssistant.exe portal discover
 ZZUAssistant.exe portal login [用户名]
@@ -139,12 +141,20 @@ ZZUAssistant.exe _completions fish install
 | 变量 | 用途 |
 | --- | --- |
 | `ZZUASSISTANT_STATE_DIR` | 覆盖会话数据库、当前用户和电费房间配置的保存目录。 |
+| `ZZUASSISTANT_USER` | 指定本次操作的当前用户；优先级低于命令行用户名，高于各认证系统保存的当前用户。 |
+| `ZZUASSISTANT_SSO_TOKEN` | 指定本进程使用的 CAS TGC 值或完整 Cookie 请求头；不会写入会话数据库。 |
+| `ZZUASSISTANT_APP_TOKEN` | 指定本进程使用的超级 App `idToken` JWT；不会写入会话数据库。 |
 | `ZZUASSISTANT_APP_DEVICE_ID` | 覆盖超级 App 登录使用的 device ID；设为手机端同一值可降低手机会话被挤下线的概率。 |
 | `ZZUASSISTANT_ECARD_PAYMENT_PASSWORD` | `electricity recharge --yes` 默认读取的校园卡支付密码，用于无交互电费充值。 |
-| `ZZUASSISTANT_ECARD_ACCESS_TOKEN` | 手动导入 eCard access token；通常不需要设置，正常情况下由超级 App 会话自动换取。 |
-| `ZZUASSISTANT_ECARD_REFRESH_TOKEN` | 与手动导入的 eCard access token 配套的 refresh token。 |
+| `ZZUASSISTANT_ECARD_TOKEN` | 指定本进程使用的 eCard access token；通常由超级 App 会话自动换取。 |
+| `ZZUASSISTANT_ECARD_REFRESH_TOKEN` | 与 `ZZUASSISTANT_ECARD_TOKEN` 配套的 refresh token。 |
 | `ZZUASSISTANT_PYTHON` | 指定课程表工具使用的 Python 3 解释器完整路径。 |
 | `ZZUASSISTANT_TOOL_DIR` | 覆盖 Python 工具目录；目录中应包含 `course.py`。 |
+
+用户名统一按“命令行参数 → `ZZUASSISTANT_USER` → 对应认证系统保存的当前
+用户”解析。SSO、超级 App、Portal 的当前用户及凭据仍彼此独立；环境变量传入
+的 token 只对当前进程生效，不会覆盖磁盘中的登录会话。建议仅在当前 Shell 中
+临时设置凭据，并在使用后立即清除。
 
 电费静默充值的 PowerShell 示例：
 

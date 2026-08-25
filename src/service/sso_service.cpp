@@ -85,7 +85,9 @@ namespace zzu_assistant::services {
                     << "  --porcelain      Machine-readable probe output.\n\n"
                     << cli::paint("NOTES", cli::Tone::yellow,
                                   context.color_enabled, true)
-                    << "\n  User defaults to the current SSO session; passwords are never saved.\n";
+                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved SSO user.\n"
+                    << "  ZZUASSISTANT_SSO_TOKEN supplies a TGC/Cookie for this process only.\n"
+                    << "  Passwords are never saved.\n";
         }
     } // namespace
 

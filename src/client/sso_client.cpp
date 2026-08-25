@@ -1,5 +1,6 @@
 #include "client/sso_client.h"
 
+#include "auth/environment.h"
 #include "model/sso.h"
 
 #include <boost/asio/connect.hpp>
@@ -182,19 +183,7 @@ namespace zzu_assistant::sso {
 
         [[nodiscard]] std::optional<std::string> environment_variable(
             const char *name) {
-#ifdef _WIN32
-            char *value = nullptr;
-            std::size_t size = 0;
-            if (_dupenv_s(&value, &size, name) != 0 || value == nullptr) {
-                return std::nullopt;
-            }
-            const std::unique_ptr<char, decltype(&std::free)> owned(value, &std::free);
-            return std::string(value);
-#else
-    const char* value = std::getenv(name);
-    return value == nullptr ? std::nullopt
-                            : std::optional<std::string>(value);
-#endif
+            return auth::environment(name);
         }
 
         [[nodiscard]] std::string ascii_lower(std::string value) {
@@ -216,32 +205,7 @@ namespace zzu_assistant::sso {
         }
 
         [[nodiscard]] std::filesystem::path state_directory() {
-            if (const auto configured = environment_variable("ZZUASSISTANT_STATE_DIR");
-                configured && !configured->empty()) {
-                return std::filesystem::path(*configured);
-            }
-#ifdef _WIN32
-            if (const auto local_app_data = environment_variable("LOCALAPPDATA")) {
-                return std::filesystem::path(*local_app_data) /
-                       "ZZUAssistant";
-            }
-#elif defined(__APPLE__)
-    if (const auto home = environment_variable("HOME")) {
-        return std::filesystem::path(*home) / "Library" /
-               "Application Support" / "ZZUAssistant";
-    }
-#else
-    if (const auto state_home = environment_variable("XDG_STATE_HOME")) {
-        return std::filesystem::path(*state_home) /
-               "zzu-assistant";
-    }
-    if (const auto home = environment_variable("HOME")) {
-        return std::filesystem::path(*home) / ".local" / "state" /
-               "zzu-assistant";
-    }
-#endif
-            throw std::runtime_error(
-                "Cannot determine the per-user Cookie storage directory");
+            return auth::state_directory();
         }
 
         [[nodiscard]] std::string user_storage_key(const std::string_view username) {
@@ -712,7 +676,17 @@ namespace zzu_assistant::sso {
                 const std::string cookie_header = cookies_
                                                       ? cookies_->header(parsed.host, parsed.target)
                                                       : std::string{};
-                if (!cookie_header.empty()) {
+                if (parsed.host == "cas.s.zzu.edu.cn") {
+                    if (const auto token = auth::environment(auth::SSO_TOKEN_ENV)) {
+                        auth::validate_header_value(*token, auth::SSO_TOKEN_ENV);
+                        request.set(http::field::cookie,
+                                    token->find('=') == std::string::npos
+                                        ? "TGC=" + *token
+                                        : *token);
+                    } else if (!cookie_header.empty()) {
+                        request.set(http::field::cookie, cookie_header);
+                    }
+                } else if (!cookie_header.empty()) {
                     request.set(http::field::cookie, cookie_header);
                 }
                 if (verb == http::verb::post) {
@@ -844,6 +818,10 @@ namespace zzu_assistant::sso {
     LoginResult SsoClient::resume(const std::string_view username,
                                   const std::string_view service_url) {
         try {
+            const bool transient_credentials =
+                    auth::environment(auth::SSO_TOKEN_ENV).has_value();
+            const bool transient_user =
+                    auth::current_user_override().has_value();
             impl_->select_user(username);
             std::string login_url(model::sso::LOGIN_URL);
             if (!service_url.empty()) {
@@ -864,8 +842,9 @@ namespace zzu_assistant::sso {
                     "No active cached SSO session", response.final_url
                 };
             }
-            impl_->save_cookies();
-            save_current_user_info(username, response.final_url);
+            if (!transient_credentials) impl_->save_cookies();
+            if (!transient_credentials && !transient_user)
+                save_current_user_info(username, response.final_url);
             return {
                 LoginStatus::success, "Cached SSO session restored",
                 response.final_url
@@ -884,6 +863,10 @@ namespace zzu_assistant::sso {
                 };
             }
 
+            const bool transient_credentials =
+                    auth::environment(auth::SSO_TOKEN_ENV).has_value();
+            const bool transient_user =
+                    auth::current_user_override().has_value();
             impl_->select_user(options.username);
 
             std::string login_url(model::sso::LOGIN_URL);
@@ -899,8 +882,9 @@ namespace zzu_assistant::sso {
                 };
             }
             if (page.body.find("name=\"execution\"") == std::string::npos) {
-                impl_->save_cookies();
-                save_current_user_info(options.username, page.final_url);
+                if (!transient_credentials) impl_->save_cookies();
+                if (!transient_credentials && !transient_user)
+                    save_current_user_info(options.username, page.final_url);
                 return {
                     LoginStatus::success, "Existing SSO session is active",
                     page.final_url
@@ -1126,10 +1110,14 @@ namespace zzu_assistant::sso {
                     submitted.final_url
                 };
             }
-            impl_->save_cookies();
-            save_current_user_info(options.username, submitted.final_url);
+            if (!transient_credentials) impl_->save_cookies();
+            if (!transient_credentials && !transient_user)
+                save_current_user_info(options.username, submitted.final_url);
             return {
-                LoginStatus::success, "SSO login succeeded; Cookie saved",
+                LoginStatus::success,
+                transient_credentials
+                    ? "SSO login succeeded for this process"
+                    : "SSO login succeeded; Cookie saved",
                 submitted.final_url
             };
         } catch (const boost::property_tree::json_parser::json_parser_error &error) {
@@ -1195,6 +1183,8 @@ namespace zzu_assistant::sso {
     }
 
     std::optional<CachedUserInfo> SsoClient::current_user() const {
+        if (const auto configured = auth::current_user_override())
+            return CachedUserInfo{.username = *configured};
         return read_current_user_info();
     }
 } // namespace zzu_assistant::sso

@@ -1,5 +1,6 @@
 #include "client/app_client.h"
 
+#include "auth/environment.h"
 #include "model/app.h"
 
 #include <boost/asio/connect.hpp>
@@ -51,37 +52,11 @@ namespace zzu_assistant::app {
         };
 
         std::optional<std::string> environment(const char *name) {
-#ifdef _WIN32
-            char *value = nullptr;
-            std::size_t size = 0;
-            if (_dupenv_s(&value, &size, name) != 0 || !value) return std::nullopt;
-            std::string result(value);
-            std::free(value);
-            return result;
-#else
-            if (const char *value = std::getenv(name)) return std::string(value);
-            return std::nullopt;
-#endif
+            return auth::environment(name);
         }
 
         std::filesystem::path state_directory() {
-            if (const auto value = environment("ZZUASSISTANT_STATE_DIR");
-                value && !value->empty())
-                return *value;
-#ifdef _WIN32
-            if (const auto value = environment("LOCALAPPDATA"))
-                return std::filesystem::path(*value) / "ZZUAssistant";
-#elif defined(__APPLE__)
-            if (const auto value = environment("HOME"))
-                return std::filesystem::path(*value) / "Library" /
-                       "Application Support" / "ZZUAssistant";
-#else
-            if (const auto value = environment("XDG_STATE_HOME"))
-                return std::filesystem::path(*value) / "zzu-assistant";
-            if (const auto value = environment("HOME"))
-                return std::filesystem::path(*value) / ".local/state/zzu-assistant";
-#endif
-            throw std::runtime_error("Cannot determine the Super App state directory");
+            return auth::state_directory();
         }
 
         std::string user_key(const std::string_view username) {
@@ -366,13 +341,19 @@ namespace zzu_assistant::app {
                 std::error_code error;
                 std::filesystem::remove(selected_file, error);
                 if (error) throw std::runtime_error("Cannot remove the Super App session DB");
-                if (current_user() == std::optional<std::string>(selected))
+                if (persisted_current_user() == std::optional<std::string>(selected))
                     std::filesystem::remove(current_file(), error);
                 return {true, "Local Super App JWT session cleared"};
             } catch (const std::exception &error) { return {false, error.what()}; }
         }
 
         std::optional<std::string> current_user() const {
+            if (const auto configured = auth::current_user_override())
+                return configured;
+            return persisted_current_user();
+        }
+
+        std::optional<std::string> persisted_current_user() const {
             std::ifstream input(current_file());
             std::string header, username;
             if (!input || !std::getline(input, header) || header != "ZZUAssistant-AppUser-v1" ||
@@ -382,6 +363,10 @@ namespace zzu_assistant::app {
         }
 
         std::string id_token(const std::string_view username) {
+            if (const auto token = auth::environment(auth::APP_TOKEN_ENV)) {
+                auth::validate_jwt(*token, auth::APP_TOKEN_ENV);
+                return *token;
+            }
             load(username);
             const std::string token = state_.get("idToken", "");
             if (token.empty())

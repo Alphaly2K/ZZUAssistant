@@ -55,7 +55,7 @@ namespace zzu_assistant::services {
                     << powershell_quoted(executable) << R"( -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
     $words = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
-    $top = @('echo', 'electricity', 'ecard', 'course', 'sso', 'portal', 'app', 'help')
+    $top = @('echo', 'electricity', 'ecard', 'course', 'sso', 'portal', 'app', 'userinfo', 'help')
     $map = @{
         electricity = @('setup', 'show', 'recharge', '--help')
         ecard       = @('balance', 'recharge', '--help')
@@ -63,6 +63,7 @@ namespace zzu_assistant::services {
         sso         = @('login', 'logout', '--help')
         portal      = @('discover', 'login', 'logout', '--help')
         app         = @('login', 'logout', '--help')
+        userinfo    = @('--porcelain', '--help')
     }
     if ($words.Count -le 2) { $candidates = $top }
     elseif ($words.Count -eq 3 -and $map.ContainsKey($words[1])) {
@@ -74,6 +75,7 @@ namespace zzu_assistant::services {
             'course'      { @('--semester', '-o', '--output', '--porcelain') }
             'sso'         { @('--mfa', '--mfa=phone', '--mfa=qr', '--porcelain') }
             'portal'      { @('--server', '--ip', '--isp', '--encrypt', '--porcelain') }
+            'userinfo'    { @('--porcelain') }
             default       { @() }
         }
     }
@@ -153,7 +155,7 @@ namespace zzu_assistant::services {
 
         void bash(ServiceContext &context) {
             context.out << R"(_zzuassistant_complete() {
-    local cur="${COMP_WORDS[COMP_CWORD]}" top="echo electricity ecard course sso portal app help" words
+    local cur="${COMP_WORDS[COMP_CWORD]}" top="echo electricity ecard course sso portal app userinfo help" words
     if (( COMP_CWORD == 1 )); then words="$top"
     elif (( COMP_CWORD == 2 )); then
         case "${COMP_WORDS[1]}" in
@@ -162,6 +164,7 @@ namespace zzu_assistant::services {
             course) words="--semester -o --output --porcelain --help" ;;
             sso|app) words="login logout --help" ;;
             portal) words="discover login logout --help" ;;
+            userinfo) words="--porcelain --help" ;;
         esac
     else
         case "${COMP_WORDS[1]}" in
@@ -170,6 +173,7 @@ namespace zzu_assistant::services {
             course) words="--semester -o --output --porcelain" ;;
             sso) words="--mfa --mfa=phone --mfa=qr --porcelain" ;;
             portal) words="--server --ip --isp --encrypt --porcelain" ;;
+            userinfo) words="--porcelain" ;;
         esac
     fi
     COMPREPLY=( $(compgen -W "$words" -- "$cur") )
@@ -192,6 +196,7 @@ _zzuassistant() {
         'sso:Manage Web SSO sessions'
         'portal:Manage campus Portal authentication'
         'app:Manage Super App authentication'
+        'userinfo:Get identity information through Web SSO'
         'help:Show help'
     )
     if (( CURRENT == 2 )); then _describe 'command' commands; return; fi
@@ -202,6 +207,7 @@ _zzuassistant() {
         sso) _values 'argument' login logout --help --mfa --porcelain ;;
         app) _values 'action' login logout --help ;;
         portal) _values 'argument' discover login logout --help --server --ip --isp --encrypt --porcelain ;;
+        userinfo) _values 'argument' --porcelain --help ;;
     esac
 }
 compdef _zzuassistant )" << context.executable_name << '\n';
@@ -212,7 +218,7 @@ compdef _zzuassistant )" << context.executable_name << '\n';
             const auto line = [&](const std::string_view arguments) {
                 context.out << "complete -c " << command << ' ' << arguments << '\n';
             };
-            line("-f -n '__fish_use_subcommand' -a 'echo electricity ecard course sso portal app help'");
+            line("-f -n '__fish_use_subcommand' -a 'echo electricity ecard course sso portal app userinfo help'");
             line("-f -n '__fish_seen_subcommand_from electricity' -a 'setup show recharge'");
             line("-f -n '__fish_seen_subcommand_from ecard' -a 'balance recharge'");
             line("-n '__fish_seen_subcommand_from course' -l semester -r");
@@ -221,7 +227,7 @@ compdef _zzuassistant )" << context.executable_name << '\n';
             line("-f -n '__fish_seen_subcommand_from portal' -a 'discover login logout'");
             line("-n '__fish_seen_subcommand_from electricity ecard' -l yes -s y");
             line("-n '__fish_seen_subcommand_from electricity' -l payment-password-env -r");
-            line("-n '__fish_seen_subcommand_from electricity ecard course sso portal' -l porcelain");
+            line("-n '__fish_seen_subcommand_from electricity ecard course sso portal userinfo' -l porcelain");
             line("-n '__fish_seen_subcommand_from sso' -l mfa -a 'phone qr' -r");
             line("-n '__fish_seen_subcommand_from portal' -l server -r");
             line("-n '__fish_seen_subcommand_from portal' -l ip -r");

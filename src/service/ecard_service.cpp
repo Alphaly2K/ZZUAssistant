@@ -30,7 +30,10 @@ namespace zzu_assistant::services {
                     << "  --porcelain   Machine-readable key=value output.\n\n"
                     << cli::paint("NOTES", cli::Tone::yellow,
                                   context.color_enabled, true)
-                    << "\n  User defaults to the current Super App session. Recharge shows\n"
+                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved App user.\n"
+                    << "  ZZUASSISTANT_APP_TOKEN selects App auth;\n"
+                    << "  ZZUASSISTANT_ECARD_TOKEN overrides eCard auth.\n"
+                    << "  Recharge shows\n"
                     << "  a terminal QR; --porcelain outputs the checkout URL instead.\n";
         }
 

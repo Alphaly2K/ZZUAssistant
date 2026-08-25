@@ -38,11 +38,12 @@ load_config() {
     source "$CONFIG_FILE"
 
     : "${ZZUASSISTANT_BIN:?配置缺少 ZZUASSISTANT_BIN}"
-    : "${ZZUASSISTANT_USERNAME:?配置缺少 ZZUASSISTANT_USERNAME}"
+    : "${ZZUASSISTANT_USER:?配置缺少 ZZUASSISTANT_USER}"
     : "${ZZU_ELECTRICITY_THRESHOLD_YUAN:?配置缺少 ZZU_ELECTRICITY_THRESHOLD_YUAN}"
     : "${ZZU_ELECTRICITY_RECHARGE_YUAN:?配置缺少 ZZU_ELECTRICITY_RECHARGE_YUAN}"
     : "${ZZU_CRON_INTERVAL_MINUTES:?配置缺少 ZZU_CRON_INTERVAL_MINUTES}"
     : "${ZZU_CRON_SCRIPT:?配置缺少 ZZU_CRON_SCRIPT}"
+    export ZZUASSISTANT_USER
     [[ -x $ZZUASSISTANT_BIN ]] || die "ZZUAssistant 不可执行：$ZZUASSISTANT_BIN"
 }
 
@@ -150,7 +151,7 @@ minimum_topup() {
 
 query_ecard_balance() {
     local output balance
-    output=$("$ZZUASSISTANT_BIN" ecard balance "$ZZUASSISTANT_USERNAME" --porcelain)
+    output=$("$ZZUASSISTANT_BIN" ecard balance --porcelain)
     balance=$(kv_value "$output" balance_yuan) || return 1
     is_number "$balance" || return 1
     printf '%s' "$balance"
@@ -207,7 +208,7 @@ run_check() {
     local lighting_yuan air_yuan ecard_balance required deficit topup
     local -a low_meters=()
 
-    output=$("$ZZUASSISTANT_BIN" electricity show "$ZZUASSISTANT_USERNAME" --porcelain)
+    output=$("$ZZUASSISTANT_BIN" electricity show --porcelain)
     lighting_quantity=$(kv_value "$output" lighting_quantity_kwh) || die '电费查询结果缺少 lighting_quantity_kwh。'
     lighting_price=$(kv_value "$output" lighting_price_yuan_per_kwh) || die '电费查询结果缺少 lighting_price_yuan_per_kwh。'
     air_quantity=$(kv_value "$output" air_conditioning_quantity_kwh) || die '电费查询结果缺少 air_conditioning_quantity_kwh。'
@@ -254,7 +255,7 @@ run_check() {
     for meter in "${low_meters[@]}"; do
         info "正在为 $meter 充值 ${ZZU_ELECTRICITY_RECHARGE_YUAN} 元。"
         if ! "$ZZUASSISTANT_BIN" electricity recharge "$meter" \
-            "$ZZU_ELECTRICITY_RECHARGE_YUAN" "$ZZUASSISTANT_USERNAME" --yes; then
+            "$ZZU_ELECTRICITY_RECHARGE_YUAN" --yes; then
             unset ZZUASSISTANT_ECARD_PAYMENT_PASSWORD
             pause_cron
             die "$meter 电费充值结果异常。为避免重复扣款，cron 已暂停；核对余额后请运行 $ZZU_CRON_SCRIPT --install。"
@@ -281,7 +282,7 @@ recover() {
         topup=$(minimum_topup "$deficit") ||
             die "至少还需 ${deficit} 元，超过单笔 100 元充值档位；请先手动充值校园卡。"
         read -r -p "按回车创建 ${topup} 元校园卡充值订单（Ctrl+C 取消）……"
-        "$ZZUASSISTANT_BIN" ecard recharge "$topup" "$ZZUASSISTANT_USERNAME" --yes
+        "$ZZUASSISTANT_BIN" ecard recharge "$topup" --yes
         read -r -p '支付完成后按回车验证校园卡余额并恢复 cron……'
         current=$(query_ecard_balance) || die '无法读取校园卡余额。'
         if ! at_least "$current" "$PENDING_REQUIRED_YUAN"; then
@@ -309,7 +310,7 @@ show_status() {
     else
         printf 'topup=none\n'
     fi
-    printf 'username=%s\n' "$ZZUASSISTANT_USERNAME"
+    printf 'username=%s\n' "$ZZUASSISTANT_USER"
     printf 'threshold_yuan=%s\n' "$ZZU_ELECTRICITY_THRESHOLD_YUAN"
     printf 'recharge_yuan=%s\n' "$ZZU_ELECTRICITY_RECHARGE_YUAN"
 }

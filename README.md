@@ -1,7 +1,6 @@
 # ZZUAssistant
 
-ZZUAssistant 是一个面向郑州大学相关服务的跨平台命令行工具。项目使用 C++23 编写主程序，通过编译期反射注册各项服务，并使用 Python 生成课程表
-ICS 文件。
+ZZUAssistant 是一个面向郑州大学相关服务的跨平台命令行工具。
 
 > 本项目不是郑州大学官方软件。登录、充值等接口可能随学校系统更新而变化。
 > 执行真实充值前请仔细核对用户、房间、类型和金额。
@@ -48,79 +47,45 @@ cmake --build --preset vcpkg-release
 查看主帮助：
 
 ```text
-ZZUAssistant.exe help
+ZZUAssistant help
 ```
 
 ### 认证
 
 ```text
-ZZUAssistant.exe app login <用户名>
-ZZUAssistant.exe app logout [用户名]
+ZZUAssistant app login <用户名>
+ZZUAssistant app logout [用户名]
 
-ZZUAssistant.exe sso login <用户名> [--mfa phone|qr]
-ZZUAssistant.exe sso logout [用户名]
-ZZUAssistant.exe userinfo [用户名] [--porcelain]
+ZZUAssistant sso login <用户名> [--mfa phone|qr]
+ZZUAssistant sso logout [用户名]
+ZZUAssistant userinfo [用户名] [--porcelain]
 
-ZZUAssistant.exe portal discover
-ZZUAssistant.exe portal login [用户名]
-ZZUAssistant.exe portal logout [用户名]
+ZZUAssistant portal discover
+ZZUAssistant portal login [用户名]
+ZZUAssistant portal logout [用户名]
 ```
 
 ### 校园卡和电费
 
 ```text
-ZZUAssistant.exe ecard balance [用户名] [--porcelain]
-ZZUAssistant.exe ecard recharge <金额> [用户名] [-y|--yes]
+ZZUAssistant ecard balance [用户名] [--porcelain]
+ZZUAssistant ecard recharge <金额> [用户名] [-y|--yes]
 
-ZZUAssistant.exe electricity setup [用户名]
-ZZUAssistant.exe electricity show [用户名] [--porcelain]
-ZZUAssistant.exe electricity recharge <lighting|air> <金额> [用户名]
+ZZUAssistant electricity setup [用户名]
+ZZUAssistant electricity show [用户名] [--porcelain]
+ZZUAssistant electricity recharge <lighting|air> <金额> [用户名]
 ```
 
 校园卡充值默认在终端显示支付二维码；使用 `--porcelain --yes` 时输出收银台
 URL，便于程序读取。
 
-### 电费自动充值
-
-macOS/Linux 等提供 `cron` 的系统可以使用仓库中的两个示例脚本：
-
-```bash
-bash ./scripts/electricity_setup.sh --bin /完整路径/ZZUAssistant
-```
-
-安装脚本会依次登录超级 App、设置照明和空调房间、询问电费余额阈值、每次
-充值金额和校园卡支付密码，并安装定时任务。默认每 5 分钟检查一次，可用
-`--interval 10` 修改间隔。电费余额按“剩余电量 × 当前单价”换算为元。
-
-校园卡余额足够时，定时任务会为低于阈值的照明或空调账户自动充值。如果校园
-卡余额不足，任务会先暂停，并在日志中给出恢复命令：
-
-```bash
-bash ./scripts/electricity_cron.sh --recover
-```
-
-恢复模式会等待用户按回车，再创建足以覆盖缺口的最小可用整十金额校园卡充值
-订单并显示二维码；支付完成并再次按回车后，它会验证余额、恢复 cron，并立即
-重试一次电费充值。如果电费支付返回异常，脚本也会暂停任务，避免网络故障造成
-重复扣款；核对实际余额后可手动恢复。其他维护命令：
-
-```bash
-bash ./scripts/electricity_cron.sh --run       # 立即检查
-bash ./scripts/electricity_cron.sh --status    # 查看状态
-bash ./scripts/electricity_cron.sh --pause     # 暂停任务
-bash ./scripts/electricity_cron.sh --install   # 恢复任务
-```
-
-配置与日志默认位于 `$XDG_CONFIG_HOME/zzu-assistant`（未设置时为
-`~/.config/zzu-assistant`）。支付密码单独保存在权限为 `600` 的文件中，不会
-写入 crontab 或日志。Windows 原生环境没有 cron，应改用 WSL 或其他任务调度器。
 
 ### 课程表
 
 ```text
-ZZUAssistant.exe course [用户名]
-ZZUAssistant.exe course --semester <current|学期ID|学期代码>
-ZZUAssistant.exe course --semester 2026-2027-1 -o schedule.ics
+ZZUAssistant course [用户名]
+ZZUAssistant course --semester <current|学期ID|学期代码>
+ZZUAssistant course --semester 2026-2027-1 -o schedule.ics
 ```
 
 课程表导出使用服务器提供的实际上课日期，因此能够保留调课、补课和周末课程。
@@ -128,10 +93,10 @@ ZZUAssistant.exe course --semester 2026-2027-1 -o schedule.ics
 ### 命令补全
 
 ```text
-ZZUAssistant.exe _completions powershell install <配置文件路径>
-ZZUAssistant.exe _completions bash install
-ZZUAssistant.exe _completions zsh install
-ZZUAssistant.exe _completions fish install
+ZZUAssistant _completions powershell install <配置文件路径>
+ZZUAssistant _completions bash install
+ZZUAssistant _completions zsh install
+ZZUAssistant _completions fish install
 ```
 
 ## 环境变量
@@ -160,7 +125,7 @@ ZZUAssistant.exe _completions fish install
 
 ```powershell
 $env:ZZUASSISTANT_ECARD_PAYMENT_PASSWORD = "校园卡支付密码"
-ZZUAssistant.exe electricity recharge lighting 10 --yes
+ZZUAssistant electricity recharge lighting 10 --yes
 Remove-Item Env:ZZUASSISTANT_ECARD_PAYMENT_PASSWORD
 ```
 
@@ -180,7 +145,7 @@ ZZUASSISTANT_ECARD_PAYMENT_PASSWORD='校园卡支付密码' \
 
 ```powershell
 $env:ZZUASSISTANT_APP_DEVICE_ID = "手机端的 deviceId"
-ZZUAssistant.exe app login <用户名>
+ZZUAssistant app login <用户名>
 ```
 
 设置值会保存到该用户独立的超级 App 会话中。后续未设置环境变量时仍会复用已

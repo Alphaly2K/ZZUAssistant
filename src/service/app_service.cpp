@@ -18,20 +18,13 @@
 namespace zzu_assistant::services {
     namespace {
         void usage(const ServiceContext &context) {
-            context.out
-                    << cli::paint(model::constants::APP, cli::Tone::cyan,
-                                  context.color_enabled, true) << '\n'
+            context.out << cli::paint(model::constants::APP, cli::Tone::cyan,
+                                      context.color_enabled, true) << '\n'
                     << cli::paint("USAGE", cli::Tone::yellow,
                                   context.color_enabled, true)
                     << "\n  " << context.executable_name
                     << " app login [username]\n  " << context.executable_name
-                    << " app logout [username]\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved App user.\n"
-                    << "  ZZUASSISTANT_APP_TOKEN supplies an idToken for this process only.\n"
-                    << "  Login uses phone-SMS MFA.\n"
-                    << "  Set ZZUASSISTANT_APP_DEVICE_ID to reuse the phone device ID.\n";
+                    << " app logout [username]\n\n";
         }
 
         std::string hidden_password(std::ostream &output, const bool color_enabled) {
@@ -60,7 +53,7 @@ namespace zzu_assistant::services {
     }
 
     std::string_view AppService::description() const noexcept {
-        return "Manage independent Super App JWT login and logout";
+        return "Manage Super App login";
     }
 
     int AppService::execute(ServiceContext &context, Arguments arguments) {

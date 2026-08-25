@@ -38,13 +38,9 @@ namespace zzu_assistant::services {
                     " [-o|--output <file>] [--porcelain]\n\n"
                     << cli::paint("OPTIONS", cli::Tone::yellow,
                                   context.color_enabled, true)
-                    << "\n  --semester VALUE   Semester ID/code; default is current.\n"
-                    << "  -o, --output FILE   ICS path; default is course-<semester>.ics.\n"
-                    << "  --porcelain         Machine-readable key=value output.\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved App user.\n"
-                    << "  ZZUASSISTANT_APP_TOKEN supplies auth for this process. Requires Python 3.\n";
+                    << "\n  --semester VALUE   Semester ID or code.\n"
+                    << "  -o, --output FILE   Output ICS file.\n"
+                    << "  --porcelain         Print key=value output.\n\n";
         }
 
         std::optional<std::string> environment(const char *name) {
@@ -210,7 +206,7 @@ namespace zzu_assistant::services {
     } // namespace
 
     std::string_view CourseService::description() const noexcept {
-        return "Export the course table as an ICS calendar";
+        return "Export course calendar";
     }
 
     int CourseService::execute(ServiceContext &context, Arguments arguments) {

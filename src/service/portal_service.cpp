@@ -22,9 +22,9 @@
 namespace zzu_assistant::services {
     namespace {
         void usage(const ServiceContext &context) {
-            context.out
-                    << cli::paint(model::constants::PORTAL, cli::Tone::cyan,
-                                  context.color_enabled, true) << '\n'
+            context.out << cli::paint(model::constants::PORTAL,
+                                      cli::Tone::cyan,
+                                      context.color_enabled, true) << '\n'
                     << cli::paint("USAGE", cli::Tone::yellow,
                                   context.color_enabled, true)
                     << "\n  " << context.executable_name
@@ -34,19 +34,7 @@ namespace zzu_assistant::services {
                     "      [--isp cmcc|unicom|telecom|@suffix] [--encrypt]\n"
                     << "  " << context.executable_name
                     << " portal logout [username] [--server URL] [--ip IPv4]\n"
-                    "      [--isp cmcc|unicom|telecom|@suffix]\n\n"
-                    << cli::paint("OPTIONS", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  --server URL    Server (default: "
-                    << model::portal::DEFAULT_SERVER_URL << ")\n"
-                    << "  --ip IPv4       Override detected client address.\n"
-                    << "  --isp VALUE     ISP suffix: cmcc, unicom, telecom or @suffix.\n"
-                    << "  --encrypt       Enable XOR parameter mode.\n"
-                    << "  --porcelain     Machine-readable discover output.\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved Portal user.\n"
-                    << "  Passwords are not saved.\n";
+                    "      [--isp cmcc|unicom|telecom|@suffix]\n\n";
         }
 
         std::string hidden_password(std::ostream &output,
@@ -102,7 +90,7 @@ namespace zzu_assistant::services {
     } // namespace
 
     std::string_view PortalService::description() const noexcept {
-        return "Discover and authenticate the independent campus network Portal";
+        return "Manage network Portal";
     }
 
     int PortalService::execute(ServiceContext &context, Arguments arguments) {

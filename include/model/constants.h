@@ -1,8 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include <string_view>
 
-// App assets
+// CLI ASCII art
 
 namespace zzu_assistant::model::constants {
     inline constexpr std::string_view APP_LOGO =

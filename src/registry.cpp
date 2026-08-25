@@ -65,10 +65,8 @@ namespace zzu_assistant {
                                const std::string_view executable_name,
                                const bool color_enabled) const {
         output << cli::paint(model::constants::APP_LOGO, cli::Tone::cyan,
-                             color_enabled, true)
-                << "\n\n";
-
-        output << cli::paint("USAGE", cli::Tone::yellow, color_enabled, true)
+                             color_enabled, true) << "\n\n"
+                << cli::paint("USAGE", cli::Tone::yellow, color_enabled, true)
                 << "\n  " << executable_name << " <command> [arguments...]\n\n"
                 << cli::paint("COMMANDS", cli::Tone::yellow, color_enabled, true)
                 << '\n';
@@ -98,6 +96,6 @@ namespace zzu_assistant {
         output << "  " << cli::paint(help, cli::Tone::green,
                                      color_enabled, true)
                 << std::string(command_width - help.size(), ' ')
-                << "Show this help message\n";
+                << "Show help\n\n";
     }
 } // namespace zzu_assistant

@@ -69,9 +69,9 @@ namespace zzu_assistant::services {
         }
 
         void usage(const ServiceContext &context) {
-            context.out
-                    << cli::paint(model::constants::SSO_LOGIN, cli::Tone::cyan,
-                                  context.color_enabled, true) << '\n'
+            context.out << cli::paint(model::constants::SSO_LOGIN,
+                                      cli::Tone::cyan,
+                                      context.color_enabled, true) << '\n'
                     << cli::paint("USAGE", cli::Tone::yellow,
                                   context.color_enabled, true)
                     << "\n  " << context.executable_name
@@ -79,21 +79,12 @@ namespace zzu_assistant::services {
                     << "  " << context.executable_name
                     << " sso login --probe [--porcelain]\n"
                     << "  " << context.executable_name
-                    << " sso logout [username]\n\n"
-                    << cli::paint("OPTIONS", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  --mfa phone|qr   Select phone SMS or terminal QR.\n"
-                    << "  --porcelain      Machine-readable probe output.\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved SSO user.\n"
-                    << "  ZZUASSISTANT_SSO_TOKEN supplies a TGC/Cookie for this process only.\n"
-                    << "  Passwords are never saved.\n";
+                    << " sso logout [username]\n\n";
         }
     } // namespace
 
     std::string_view SSOService::description() const noexcept {
-        return "Manage independent Web SSO/CAS login and logout";
+        return "Manage Web SSO";
     }
 
     int SSOService::execute(ServiceContext &context, Arguments arguments) {

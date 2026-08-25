@@ -11,7 +11,6 @@
 #include "service/sso_service.h"
 #include "service/userinfo_service.h"
 #include "model/constants.h"
-
 #include <boost/describe/class.hpp>
 
 #include <string_view>

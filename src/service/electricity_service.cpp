@@ -27,9 +27,9 @@
 namespace zzu_assistant::services {
     namespace {
         void usage(const ServiceContext &context) {
-            context.out
-                    << cli::paint(model::constants::ELECTRICITY, cli::Tone::cyan,
-                                  context.color_enabled, true) << '\n'
+            context.out << cli::paint(model::constants::ELECTRICITY,
+                                      cli::Tone::cyan,
+                                      context.color_enabled, true) << '\n'
                     << cli::paint("USAGE", cli::Tone::yellow,
                                   context.color_enabled, true)
                     << "\n  " << context.executable_name
@@ -42,16 +42,9 @@ namespace zzu_assistant::services {
                     << cli::paint("OPTIONS", cli::Tone::yellow,
                                   context.color_enabled, true)
                     << "\n"
-                    << "  -y, --yes                     Non-interactive recharge.\n"
+                    << "  -y, --yes                     Skip confirmation.\n"
                     << "  --payment-password-env NAME   Read payment password from NAME.\n"
-                    << "  --porcelain                   Machine-readable show output.\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved App user.\n"
-                    << "  ZZUASSISTANT_APP_TOKEN selects App auth;\n"
-                    << "  ZZUASSISTANT_ECARD_TOKEN overrides eCard auth.\n"
-                    << "  With --yes, the password\n"
-                    << "  defaults to ZZUASSISTANT_ECARD_PAYMENT_PASSWORD and is not saved.\n";
+                    << "  --porcelain                   Print key=value output.\n\n";
         }
 
         std::string resolve_username(app::AppClient &state,
@@ -240,7 +233,7 @@ namespace zzu_assistant::services {
     } // namespace
 
     std::string_view ElectricityService::description() const noexcept {
-        return "Configure, inspect and recharge electricity meters";
+        return "Manage electricity";
     }
 
     int ElectricityService::execute(ServiceContext &context, Arguments arguments) {

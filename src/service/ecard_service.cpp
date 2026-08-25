@@ -15,9 +15,9 @@
 namespace zzu_assistant::services {
     namespace {
         void usage(const ServiceContext &context) {
-            context.out
-                    << cli::paint(model::constants::ECARD, cli::Tone::cyan,
-                                  context.color_enabled, true) << '\n'
+            context.out << cli::paint(model::constants::ECARD,
+                                      cli::Tone::cyan,
+                                      context.color_enabled, true) << '\n'
                     << cli::paint("USAGE", cli::Tone::yellow,
                                   context.color_enabled, true)
                     << "\n  " << context.executable_name
@@ -26,15 +26,8 @@ namespace zzu_assistant::services {
                     << " ecard recharge <amount-yuan> [username] [-y|--yes] [--porcelain]\n\n"
                     << cli::paint("OPTIONS", cli::Tone::yellow,
                                   context.color_enabled, true)
-                    << "\n  -y, --yes     Create the payment order without confirmation.\n"
-                    << "  --porcelain   Machine-readable key=value output.\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  User priority: argument, ZZUASSISTANT_USER, saved App user.\n"
-                    << "  ZZUASSISTANT_APP_TOKEN selects App auth;\n"
-                    << "  ZZUASSISTANT_ECARD_TOKEN overrides eCard auth.\n"
-                    << "  Recharge shows\n"
-                    << "  a terminal QR; --porcelain outputs the checkout URL instead.\n";
+                    << "\n  -y, --yes     Skip confirmation.\n"
+                    << "  --porcelain   Print key=value output.\n\n";
         }
 
         std::string resolve_username(app::AppClient &state,
@@ -50,7 +43,7 @@ namespace zzu_assistant::services {
     } // namespace
 
     std::string_view EcardService::description() const noexcept {
-        return "Query and recharge the campus card";
+        return "Manage campus card";
     }
 
     int EcardService::execute(ServiceContext &context, Arguments arguments) {

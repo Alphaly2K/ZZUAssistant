@@ -23,11 +23,7 @@ namespace zzu_assistant::services {
                     << " _completions powershell uninstall <profile-path>\n"
                     << "  " << context.executable_name
                     << " _completions <bash|zsh|fish> <install|uninstall>\n"
-                    << "      [config-path]\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  With no action, writes the script to stdout. PowerShell install\n"
-                    << "  requires $PROFILE as <profile-path>.\n";
+                    << "      [config-path]\n\n";
         }
 
         std::string single_quoted(std::string_view value) {

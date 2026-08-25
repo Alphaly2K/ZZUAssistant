@@ -8,7 +8,7 @@
 
 namespace zzu_assistant::services {
     std::string_view EchoService::description() const noexcept {
-        return "Print the supplied arguments";
+        return "Print text";
     }
 
     inline constexpr std::string_view CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -20,10 +20,7 @@ namespace zzu_assistant::services {
             (arguments.front() == "--help" || arguments.front() == "-h")) {
             context.out << cli::paint("USAGE", cli::Tone::yellow,
                                       context.color_enabled, true)
-                    << "\n  " << context.executable_name << " echo [text...]\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  Prints the supplied text to standard output.\n";
+                    << "\n  " << context.executable_name << " echo [text...]\n\n";
             return 0;
         }
 

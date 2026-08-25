@@ -11,18 +11,10 @@
 namespace zzu_assistant::services {
     namespace {
         void usage(const ServiceContext &context) {
-            context.out
-                    << cli::paint("USER INFO", cli::Tone::cyan,
-                                  context.color_enabled, true) << '\n'
-                    << cli::paint("USAGE", cli::Tone::yellow,
+            context.out << cli::paint("USAGE", cli::Tone::yellow,
                                   context.color_enabled, true)
                     << "\n  " << context.executable_name
-                    << " userinfo [username] [--porcelain]\n\n"
-                    << cli::paint("NOTES", cli::Tone::yellow,
-                                  context.color_enabled, true)
-                    << "\n  Authenticates through the saved SSO session or "
-                       "ZZUASSISTANT_SSO_TOKEN.\n"
-                    << "  Username priority: argument, ZZUASSISTANT_USER, saved SSO user.\n";
+                    << " userinfo [username] [--porcelain]\n\n";
         }
 
         void value(std::ostream &output, const std::string_view key,
@@ -32,7 +24,7 @@ namespace zzu_assistant::services {
     } // namespace
 
     std::string_view UserInfoService::description() const noexcept {
-        return "Get the current user's identity through Web SSO";
+        return "Show SSO user information";
     }
 
     int UserInfoService::execute(ServiceContext &context, Arguments arguments) {

@@ -28,7 +28,3 @@ bash ./scripts/electricity_cron.sh --status    # 查看状态
 bash ./scripts/electricity_cron.sh --pause     # 暂停任务
 bash ./scripts/electricity_cron.sh --install   # 恢复任务
 ```
-
-配置与日志默认位于 `$XDG_CONFIG_HOME/zzu-assistant`（未设置时为
-`~/.config/zzu-assistant`）。支付密码单独保存在权限为 `600` 的文件中，不会
-写入 crontab 或日志。Windows 原生环境没有 cron，应改用 WSL 或其他任务调度器。

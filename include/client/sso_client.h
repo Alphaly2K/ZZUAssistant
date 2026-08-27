@@ -1,5 +1,7 @@
 #pragma once
 
+#include "client/options.h"
+
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -9,10 +11,16 @@
 #include <string_view>
 #include <vector>
 
-// CAS SSO client for ZZU's CAS server, supporting MFA and session persistence.
-// Less ability supported than the app client, soon will be deprecated.
+// In-memory CAS SSO client with MFA.
 
 namespace zzu_assistant::sso {
+    struct Session {
+        std::string username;
+        std::string final_url;
+        std::int64_t updated_at{};
+        std::string cookies;
+        std::string cas_cookie;
+    };
     enum class LoginStatus {
         success,
         no_session,
@@ -50,15 +58,9 @@ namespace zzu_assistant::sso {
         }
     };
 
-    struct CachedUserInfo {
-        std::string username;
-        std::string final_url;
-        std::int64_t updated_at{};
-    };
-
     class SsoClient final {
     public:
-        SsoClient();
+        explicit SsoClient(NetworkOptions options = {});
 
         ~SsoClient();
 
@@ -72,14 +74,15 @@ namespace zzu_assistant::sso {
 
         LoginResult probe();
 
-        LoginResult resume(std::string_view username,
-                           std::string_view service_url = {});
+        LoginResult resume(std::string_view service_url = {});
 
         LoginResult login(const LoginOptions &options);
 
-        LoginResult logout(std::string_view username = {});
+        LoginResult login(const Session &session);
 
-        [[nodiscard]] std::optional<CachedUserInfo> current_user() const;
+        LoginResult logout();
+
+        [[nodiscard]] Session session() const;
 
     private:
         class Impl;

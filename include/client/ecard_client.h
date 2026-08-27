@@ -2,16 +2,26 @@
 
 #include "model/ecard.h"
 #include "model/electricity.h"
+#include "client/options.h"
 
 #include <memory>
+#include <string>
 #include <string_view>
 
 // Client for e-card operations.
 
 namespace zzu_assistant::ecard {
+    struct Session {
+        std::string username;
+        std::string access_token;
+        std::string refresh_token;
+        std::string access_token_expire;
+        ElectricityProfiles profiles;
+    };
+
     class EcardClient final {
     public:
-        EcardClient();
+        explicit EcardClient(NetworkOptions options = {});
 
         ~EcardClient();
 
@@ -23,9 +33,8 @@ namespace zzu_assistant::ecard {
 
         EcardClient &operator=(const EcardClient &) = delete;
 
-        void select_user(std::string_view username);
-
-        void authorize(std::string_view super_app_id_token = {});
+        void login(std::string_view username,
+                   std::string_view super_app_id_token);
 
         [[nodiscard]] LocationPage locations(std::string_view location_type,
                                              const LocationPath &path);
@@ -44,6 +53,10 @@ namespace zzu_assistant::ecard {
         [[nodiscard]] bool load_profiles(ElectricityProfiles &profiles) const;
 
         void save_profiles(const ElectricityProfiles &profiles) const;
+
+        [[nodiscard]] Session session() const;
+
+        void login(const Session &session);
 
     private:
         class Impl;

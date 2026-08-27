@@ -2,6 +2,7 @@
 
 #include "client/app_client.h"
 #include "service.h"
+#include "cli/session_store.h"
 
 namespace zzu_assistant::services {
     class AppService final : public Service {
@@ -12,5 +13,6 @@ namespace zzu_assistant::services {
 
     private:
         app::AppClient client_;
+        cli::SessionStore sessions_;
     };
 } // namespace zzu_assistant::services

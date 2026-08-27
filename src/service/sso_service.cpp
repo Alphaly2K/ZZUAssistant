@@ -1,6 +1,7 @@
 #include "service/sso_service.h"
 
 #include "cli/console.h"
+#include "auth/environment.h"
 #include "cli/qr_renderer.h"
 #include "model/constants.h"
 
@@ -88,6 +89,7 @@ namespace zzu_assistant::services {
     }
 
     int SSOService::execute(ServiceContext &context, Arguments arguments) {
+        client_ = sso::SsoClient(cli::SessionStore::network_options());
         if (arguments.empty() || arguments.front() == "--help" ||
             arguments.front() == "-h") {
             usage(context);
@@ -103,10 +105,12 @@ namespace zzu_assistant::services {
             }
             cli::heading(context.out, "Web SSO", "Sign out",
                          context.color_enabled);
-            const std::string_view username = arguments.empty()
-                                                  ? std::string_view{}
-                                                  : arguments.front();
-            const sso::LoginResult result = client_.logout(username);
+            const std::string username = auth::resolve_username(
+                arguments.empty() ? std::string_view{} : arguments.front(),
+                sessions_.current_user("sso"), "SSO");
+            if (const auto saved = sessions_.load_sso(username)) client_.login(*saved);
+            const sso::LoginResult result = client_.logout();
+            if (result.succeeded()) sessions_.remove_sso(username);
             cli::status(result.succeeded() ? context.out : context.err,
                         result.succeeded() ? "OK" : "ERROR", result.message,
                         result.succeeded() ? cli::Tone::green : cli::Tone::red,
@@ -170,12 +174,9 @@ namespace zzu_assistant::services {
             if (!arguments.empty() && !arguments.front().starts_with('-')) {
                 username = arguments.front();
                 option_start = 1;
-            } else if (const auto current = client_.current_user()) {
-                username = current->username;
             }
-            if (username.empty())
-                throw std::runtime_error(
-                    "No current SSO user; provide a username for the first login");
+            username = auth::resolve_username(username,
+                                              sessions_.current_user("sso"), "SSO");
             cli::field(context.out, "User", username, context.color_enabled);
             std::string_view service_url;
             sso::MfaMethod mfa_method = sso::MfaMethod::secure_phone;
@@ -212,9 +213,10 @@ namespace zzu_assistant::services {
                 }
             }
 
-            const sso::LoginResult cached =
-                    client_.resume(username, service_url);
+            if (const auto saved = sessions_.load_sso(username)) client_.login(*saved);
+            const sso::LoginResult cached = client_.resume(service_url);
             if (cached.succeeded()) {
+                sessions_.save(client_.session());
                 cli::status(context.out, "SESSION", cached.message,
                             cli::Tone::green, context.color_enabled);
                 if (!cached.final_url.empty()) {
@@ -263,6 +265,7 @@ namespace zzu_assistant::services {
             }
 
             if (result.succeeded()) {
+                sessions_.save(client_.session());
                 cli::status(context.out, "OK", result.message,
                             cli::Tone::green, context.color_enabled);
                 if (!result.final_url.empty()) {

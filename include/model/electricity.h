@@ -1,13 +1,9 @@
 #pragma once
 
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace zzu_assistant::ecard {
-    inline constexpr std::string_view PAYMENT_PASSWORD_ENVIRONMENT =
-            "ZZUASSISTANT_ECARD_PAYMENT_PASSWORD";
-
     struct LocationPath {
         std::string big_area;
         std::string area;

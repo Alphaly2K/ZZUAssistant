@@ -94,6 +94,7 @@ namespace zzu_assistant::services {
     }
 
     int PortalService::execute(ServiceContext &context, Arguments arguments) {
+        client_ = portal::PortalClient(cli::SessionStore::network_options());
         if (arguments.empty() || arguments.front() == "--help" ||
             arguments.front() == "-h") {
             usage(context);
@@ -145,7 +146,14 @@ namespace zzu_assistant::services {
             std::string server(model::portal::DEFAULT_SERVER_URL);
             std::string ip;
             std::string suffix;
-            if (const auto current = client_.current_session();
+            const auto saved_portal = username.empty()
+                                          ? sessions_.current_user("portal")
+                                          : std::optional<std::string>(username);
+            if (saved_portal) {
+                if (const auto restored = sessions_.load_portal(*saved_portal))
+                    client_.login(*restored);
+            }
+            if (const auto current = client_.session();
                 current && (username.empty() || username == current->username)) {
                 if (username.empty()) username = current->username;
                 server = current->server_url;
@@ -192,12 +200,8 @@ namespace zzu_assistant::services {
                             cli::Tone::yellow, context.color_enabled);
             }
             if (logout) {
-                const portal::AuthResult result = client_.logout({
-                    .server_url = server,
-                    .user_ip = ip,
-                    .username = username,
-                    .isp_suffix = suffix,
-                });
+                const portal::AuthResult result = client_.logout();
+                if (result.success) sessions_.remove_portal(username);
                 cli::status(result.success ? context.out : context.err,
                             result.success ? "OK" : "ERROR", result.message,
                             result.success ? cli::Tone::green : cli::Tone::red,
@@ -207,7 +211,7 @@ namespace zzu_assistant::services {
             std::string password = hidden_password(context.out,
                                                    context.color_enabled);
             try {
-                const portal::AuthResult result = client_.authenticate({
+                const portal::AuthResult result = client_.login({
                     .server_url = server,
                     .user_ip = ip,
                     .username = username,
@@ -215,6 +219,8 @@ namespace zzu_assistant::services {
                     .isp_suffix = suffix,
                     .encrypt_parameters = encrypt,
                 });
+                if (result.success && client_.session())
+                    sessions_.save(*client_.session());
                 OPENSSL_cleanse(password.data(), password.size());
                 cli::status(result.success ? context.out : context.err,
                             result.success ? "OK" : "ERROR", result.message,

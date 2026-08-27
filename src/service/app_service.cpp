@@ -1,6 +1,7 @@
 #include "service/app_service.h"
 
 #include "cli/console.h"
+#include "auth/environment.h"
 
 #include <openssl/crypto.h>
 #ifdef _WIN32
@@ -57,6 +58,7 @@ namespace zzu_assistant::services {
     }
 
     int AppService::execute(ServiceContext &context, Arguments arguments) {
+        client_ = app::AppClient(cli::SessionStore::app_options());
         if (arguments.empty() || arguments.front() == "--help" || arguments.front() == "-h") {
             usage(context);
             return arguments.empty() ? 2 : 0;
@@ -69,7 +71,13 @@ namespace zzu_assistant::services {
                 usage(context);
                 return 2;
             }
-            const auto result = client_.logout(arguments.size() == 2 ? arguments[1] : std::string_view{});
+            std::string username = arguments.size() == 2
+                                       ? std::string(arguments[1])
+                                       : auth::resolve_username({}, sessions_.current_user("app"), "App");
+            if (const auto saved = sessions_.load_app(username))
+                static_cast<void>(client_.login(*saved));
+            const auto result = client_.logout();
+            if (result.success) sessions_.remove_app(username);
             cli::status(result.success ? context.out : context.err,
                         result.success ? "OK" : "ERROR", result.message,
                         result.success ? cli::Tone::green : cli::Tone::red,
@@ -85,11 +93,9 @@ namespace zzu_assistant::services {
                      context.color_enabled);
         try {
             std::string username;
-            if (arguments.size() == 2) username = arguments[1];
-            else username = client_.current_user().value_or("");
-            if (username.empty())
-                throw std::runtime_error(
-                    "No current Super App user; provide a username for the first login");
+            username = auth::resolve_username(
+                arguments.size() == 2 ? arguments[1] : std::string_view{},
+                sessions_.current_user("app"), "App");
             cli::field(context.out, "User", username, context.color_enabled);
             password = hidden_password(context.out, context.color_enabled);
             const auto result = client_.login({
@@ -108,6 +114,7 @@ namespace zzu_assistant::services {
                 },
             });
             OPENSSL_cleanse(password.data(), password.size());
+            if (result.success) sessions_.save(client_.session());
             cli::status(result.success ? context.out : context.err,
                         result.success ? "OK" : "ERROR", result.message,
                         result.success ? cli::Tone::green : cli::Tone::red,

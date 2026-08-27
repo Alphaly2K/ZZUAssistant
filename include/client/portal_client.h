@@ -1,5 +1,7 @@
 #pragma once
 
+#include "client/options.h"
+
 #include <optional>
 #include <memory>
 #include <string>
@@ -30,14 +32,7 @@ namespace zzu_assistant::portal {
         std::string message;
     };
 
-    struct LogoutOptions {
-        std::string_view server_url;
-        std::string_view user_ip;
-        std::string_view username;
-        std::string_view isp_suffix;
-    };
-
-    struct CachedSession {
+    struct Session {
         std::string username;
         std::string server_url;
         std::string user_ip;
@@ -46,7 +41,7 @@ namespace zzu_assistant::portal {
 
     class PortalClient final {
     public:
-        PortalClient();
+        explicit PortalClient(NetworkOptions options = {});
 
         ~PortalClient();
 
@@ -60,16 +55,19 @@ namespace zzu_assistant::portal {
 
         [[nodiscard]] PortalInfo discover();
 
-        [[nodiscard]] AuthResult authenticate(const AuthOptions &options);
+        [[nodiscard]] AuthResult login(const AuthOptions &options);
 
-        [[nodiscard]] AuthResult logout(const LogoutOptions &options);
+        [[nodiscard]] AuthResult logout();
 
-        [[nodiscard]] std::optional<CachedSession> current_session() const;
+        [[nodiscard]] std::optional<Session> session() const;
+
+        void login(const Session &session);
 
         [[nodiscard]] static std::string local_ipv4();
 
     private:
         class Impl;
         std::unique_ptr<Impl> impl_;
+        std::optional<Session> session_;
     };
 } // namespace zzu_assistant::portal

@@ -1,6 +1,5 @@
 #include "client/app_client.h"
 
-#include "auth/environment.h"
 #include "model/app.h"
 
 #include <boost/asio/connect.hpp>
@@ -21,8 +20,6 @@
 #include <array>
 #include <chrono>
 #include <cstdlib>
-#include <filesystem>
-#include <fstream>
 #include <format>
 #include <iomanip>
 #include <map>
@@ -50,36 +47,6 @@ namespace zzu_assistant::app {
             unsigned status{};
             std::string body;
         };
-
-        std::optional<std::string> environment(const char *name) {
-            return auth::environment(name);
-        }
-
-        std::filesystem::path state_directory() {
-            return auth::state_directory();
-        }
-
-        std::string user_key(const std::string_view username) {
-            std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
-            unsigned size = 0;
-            if (EVP_Digest(username.data(), username.size(), digest.data(), &size,
-                           EVP_sha256(), nullptr) != 1)
-                throw std::runtime_error("Cannot derive the Super App user key");
-            std::ostringstream out;
-            out << std::hex << std::setfill('0');
-            for (unsigned i = 0; i < size; ++i)
-                out << std::setw(2) << static_cast<unsigned>(digest[i]);
-            return out.str();
-        }
-
-        std::filesystem::path session_file(const std::string_view username) {
-            return state_directory() / "sessions" /
-                   (user_key(username) + ".superapp.db");
-        }
-
-        std::filesystem::path current_file() {
-            return state_directory() / "current-app-user.db";
-        }
 
         ParsedUrl parse_https(const std::string_view url) {
             constexpr std::string_view prefix = "https://";
@@ -191,8 +158,9 @@ namespace zzu_assistant::app {
 
     class AppClient::Impl final {
     public:
-        Impl() : tls_(ssl::context::tls_client) {
-            if (const auto ca = environment("SSL_CERT_FILE"); ca && !ca->empty()) tls_.load_verify_file(*ca);
+        explicit Impl(ClientOptions options)
+            : options_(std::move(options)), tls_(ssl::context::tls_client) {
+            if (!options_.ca_file.empty()) tls_.load_verify_file(options_.ca_file);
 #ifdef ZZU_DEFAULT_CA_FILE
             else tls_.load_verify_file(ZZU_DEFAULT_CA_FILE);
 #else
@@ -241,16 +209,16 @@ namespace zzu_assistant::app {
             try {
                 if (options.username.empty() || options.password.empty())
                     throw std::runtime_error("Super App username and password are required");
-                load(options.username);
-                if (const auto configured = environment(
-                        model::app::SUPER_APP_DEVICE_ID_ENVIRONMENT.data())) {
-                    if (configured->empty() || configured->size() > 128 ||
-                        std::ranges::any_of(*configured, [](const unsigned char ch) {
+                if (!username_.empty() && username_ != options.username) state_.clear();
+                username_ = options.username;
+                if (!options_.device_id.empty()) {
+                    if (options_.device_id.size() > 128 ||
+                        std::ranges::any_of(options_.device_id, [](const unsigned char ch) {
                             return ch <= 0x20 || ch >= 0x7f;
                         }))
                         throw std::runtime_error(
-                            "ZZUASSISTANT_APP_DEVICE_ID must be 1-128 printable ASCII characters without spaces");
-                    state_.put("deviceId", *configured);
+                            "device_id must be 1-128 printable ASCII characters without spaces");
+                    state_.put("deviceId", options_.device_id);
                 } else if (state_.get("deviceId", "").empty()) {
                     state_.put("deviceId", uuid_v4());
                 }
@@ -324,59 +292,26 @@ namespace zzu_assistant::app {
                         result, "Super App login failed"));
                 state_.put("idToken", result.get<std::string>("data.idToken"));
                 state_.put("refreshToken", result.get<std::string>("data.refreshToken"));
-                save();
-                save_current(options.username);
-                return {true, "Super App JWT session saved separately"};
+                return {true, "Super App session is ready"};
             } catch (const std::exception &error) { return {false, error.what()}; }
         }
 
-        LoginResult logout(std::string_view username) {
-            try {
-                std::string selected(username);
-                if (selected.empty()) selected = current_user().value_or("");
-                if (selected.empty()) return {false, "No current Super App user"};
-                const std::filesystem::path selected_file = session_file(selected);
-                if (!std::filesystem::exists(selected_file))
-                    return {false, "No saved Super App session for the selected user"};
-                std::error_code error;
-                std::filesystem::remove(selected_file, error);
-                if (error) throw std::runtime_error("Cannot remove the Super App session DB");
-                if (persisted_current_user() == std::optional<std::string>(selected))
-                    std::filesystem::remove(current_file(), error);
-                return {true, "Local Super App JWT session cleared"};
-            } catch (const std::exception &error) { return {false, error.what()}; }
+        LoginResult logout() {
+            username_.clear();
+            state_.clear();
+            return {true, "Super App session cleared"};
         }
 
-        std::optional<std::string> current_user() const {
-            if (const auto configured = auth::current_user_override())
-                return configured;
-            return persisted_current_user();
-        }
-
-        std::optional<std::string> persisted_current_user() const {
-            std::ifstream input(current_file());
-            std::string header, username;
-            if (!input || !std::getline(input, header) || header != "ZZUAssistant-AppUser-v1" ||
-                !std::getline(input, username) || username.empty())
-                return std::nullopt;
-            return username;
-        }
-
-        std::string id_token(const std::string_view username) {
-            if (const auto token = auth::environment(auth::APP_TOKEN_ENV)) {
-                auth::validate_jwt(*token, auth::APP_TOKEN_ENV);
-                return *token;
-            }
-            load(username);
+        std::string id_token() {
             const std::string token = state_.get("idToken", "");
             if (token.empty())
                 throw std::runtime_error(
-                    "No Super App session for this user; run 'app login <username>' first");
+                    "Super App client is not logged in");
             return token;
         }
 
-        double card_balance(const std::string_view username) {
-            const std::string token = id_token(username);
+        double card_balance() {
+            const std::string token = id_token();
             const Response response = request(model::app::CAMPUS_CARD_BALANCE_URL,
                                               http::verb::get, {}, {},
                                               {
@@ -398,47 +333,29 @@ namespace zzu_assistant::app {
             return item->second.get<double>("amount");
         }
 
-        void load(const std::string_view username) {
-            username_ = username;
-            file_ = session_file(username);
+        Session session() const {
+            return {username_, state_.get("deviceId", ""),
+                    state_.get("idToken", ""), state_.get("refreshToken", "")};
+        }
+
+        void restore_session(const Session &session) {
+            username_ = session.username;
             state_.clear();
-            std::ifstream input(file_);
-            if (input) boost::property_tree::read_json(input, state_);
+            state_.put("deviceId", options_.device_id.empty()
+                                       ? session.device_id
+                                       : options_.device_id);
+            state_.put("idToken", session.id_token);
+            state_.put("refreshToken", session.refresh_token);
         }
 
-        void save() const {
-            std::error_code error;
-            std::filesystem::create_directories(file_.parent_path(), error);
-            if (error) throw std::runtime_error("Cannot create Super App session directory");
-            const auto temporary = std::filesystem::path(file_.string() + ".tmp"); {
-                std::ofstream output(temporary);
-                if (!output) throw std::runtime_error("Cannot save Super App session");
-                boost::property_tree::write_json(output, state_, true);
-            }
-            std::filesystem::rename(temporary, file_, error);
-            if (error) {
-                std::filesystem::remove(file_, error);
-                error.clear();
-                std::filesystem::rename(temporary, file_, error);
-            }
-            if (error) throw std::runtime_error("Cannot replace Super App session DB");
-        }
-
-        void save_current(const std::string_view username) const {
-            std::error_code error;
-            std::filesystem::create_directories(current_file().parent_path(), error);
-            std::ofstream output(current_file(), std::ios::trunc);
-            if (!output) throw std::runtime_error("Cannot save current Super App user");
-            output << "ZZUAssistant-AppUser-v1\n" << username << '\n';
-        }
-
+        ClientOptions options_;
         ssl::context tls_;
         std::string username_;
-        std::filesystem::path file_;
         ptree state_;
     };
 
-    AppClient::AppClient() : impl_(std::make_unique<Impl>()) {
+    AppClient::AppClient(ClientOptions options)
+        : impl_(std::make_unique<Impl>(std::move(options))) {
     }
 
     AppClient::~AppClient() = default;
@@ -448,14 +365,22 @@ namespace zzu_assistant::app {
     AppClient &AppClient::operator=(AppClient &&) noexcept = default;
 
     LoginResult AppClient::login(const LoginOptions &options) { return impl_->login(options); }
-    LoginResult AppClient::logout(const std::string_view username) { return impl_->logout(username); }
-    std::optional<std::string> AppClient::current_user() const { return impl_->current_user(); }
+    LoginResult AppClient::logout() { return impl_->logout(); }
 
-    std::string AppClient::id_token(const std::string_view username) const {
-        return const_cast<Impl *>(impl_.get())->id_token(username);
+    std::string AppClient::id_token() const {
+        return const_cast<Impl *>(impl_.get())->id_token();
     }
 
-    double AppClient::card_balance(const std::string_view username) const {
-        return const_cast<Impl *>(impl_.get())->card_balance(username);
+    double AppClient::card_balance() const {
+        return const_cast<Impl *>(impl_.get())->card_balance();
+    }
+    Session AppClient::session() const { return impl_->session(); }
+    LoginResult AppClient::login(const Session &session) {
+        if (session.username.empty())
+            return {false, "Session username is required"};
+        if (session.id_token.empty())
+            return {false, "Session idToken is required"};
+        impl_->restore_session(session);
+        return {true, "Super App session restored"};
     }
 } // namespace zzu_assistant::app

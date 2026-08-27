@@ -28,6 +28,7 @@ namespace zzu_assistant::services {
     }
 
     int UserInfoService::execute(ServiceContext &context, Arguments arguments) {
+        sso_client_ = sso::SsoClient(cli::SessionStore::network_options());
         if (!arguments.empty() && (arguments.front() == "--help" ||
                                    arguments.front() == "-h")) {
             usage(context);
@@ -49,17 +50,16 @@ namespace zzu_assistant::services {
                 }
             }
 
-            std::optional<std::string> cached;
-            if (const auto current = sso_client_.current_user())
-                cached = current->username;
             const std::string username = auth::resolve_username(
-                explicit_user, cached, "SSO");
-            const auto result = sso_client_.resume(
-                username, model::userinfo::SERVICE_URL);
+                explicit_user, sessions_.current_user("sso"), "SSO");
+            if (const auto saved = sessions_.load_sso(username))
+                sso_client_.login(*saved);
+            const auto result = sso_client_.resume(model::userinfo::SERVICE_URL);
             if (!result.succeeded())
                 throw std::runtime_error(
                     "SSO authentication is unavailable: " + result.message +
                     "; run 'sso login " + username + "' first");
+            sessions_.save(sso_client_.session());
             const auto info = client_.parse_sso_redirect(result.final_url, username);
             if (porcelain) {
                 value(context.out, "username", info.username);

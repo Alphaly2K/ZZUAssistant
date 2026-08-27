@@ -1,6 +1,5 @@
 #include "client/ecard_client.h"
 
-#include "auth/environment.h"
 #include "model/app.h"
 
 #include <boost/asio/connect.hpp>
@@ -25,8 +24,6 @@
 #include <ctime>
 #include <cstring>
 #include <cstdlib>
-#include <filesystem>
-#include <fstream>
 #include <format>
 #include <iomanip>
 #include <map>
@@ -49,28 +46,6 @@ namespace zzu_assistant::ecard {
             std::string body;
             std::string location;
         };
-
-        std::optional<std::string> environment(const char *name) {
-            return auth::environment(name);
-        }
-
-        std::filesystem::path state_directory() {
-            return auth::state_directory();
-        }
-
-        std::string user_key(const std::string_view username) {
-            std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
-            unsigned int size = 0;
-            if (EVP_Digest(username.data(), username.size(), digest.data(), &size,
-                           EVP_sha256(), nullptr) != 1) {
-                throw std::runtime_error("Cannot derive the eCard user key");
-            }
-            std::ostringstream out;
-            out << std::hex << std::setfill('0');
-            for (unsigned index = 0; index < size; ++index)
-                out << std::setw(2) << static_cast<unsigned>(digest[index]);
-            return out.str();
-        }
 
         ptree parse_json(const std::string &body) {
             std::istringstream input(body);
@@ -371,9 +346,9 @@ namespace zzu_assistant::ecard {
 
     class EcardClient::Impl final {
     public:
-        Impl() : tls_(ssl::context::tls_client) {
-            if (const auto ca = environment("SSL_CERT_FILE"); ca && !ca->empty()) {
-                tls_.load_verify_file(*ca);
+        explicit Impl(const NetworkOptions &options) : tls_(ssl::context::tls_client) {
+            if (!options.ca_file.empty()) {
+                tls_.load_verify_file(options.ca_file);
 #ifdef ZZU_DEFAULT_CA_FILE
             } else {
                 tls_.load_verify_file(ZZU_DEFAULT_CA_FILE);
@@ -387,18 +362,8 @@ namespace zzu_assistant::ecard {
 
         void select_user(const std::string_view username) {
             if (username.empty()) throw std::invalid_argument("Username is required");
-            environment_credentials_ = false;
+            if (username_ != username) state_.clear();
             username_ = username;
-            file_ = state_directory() / "sessions" /
-                    (user_key(username) + ".ecard.db");
-            state_.clear();
-            std::ifstream input(file_);
-            if (input) {
-                try { boost::property_tree::read_json(input, state_); } catch (const
-                    boost::property_tree::json_parser::json_parser_error &) {
-                    throw std::runtime_error("The selected user's eCard DB is corrupt");
-                }
-            }
         }
 
         Response request(const http::verb verb, const std::string_view target,
@@ -450,32 +415,7 @@ namespace zzu_assistant::ecard {
         }
 
         void authorize(const std::string_view super_app_id_token) {
-            if (const auto token = auth::environment(auth::ECARD_TOKEN_ENV)) {
-                auth::validate_header_value(*token, auth::ECARD_TOKEN_ENV);
-                state_.put("accessToken", *token);
-                if (const auto refresh = auth::environment(
-                        auth::ECARD_REFRESH_TOKEN_ENV)) {
-                    auth::validate_header_value(*refresh,
-                                                auth::ECARD_REFRESH_TOKEN_ENV);
-                    state_.put("refreshToken", *refresh);
-                } else {
-                    state_.erase("refreshToken");
-                }
-                environment_credentials_ = true;
-                return;
-            }
-            const bool transient_app_credentials =
-                    auth::environment(auth::APP_TOKEN_ENV).has_value();
-            if (transient_app_credentials) {
-                // A process-local App token must not reuse or overwrite the
-                // selected user's persistent eCard credentials.
-                state_.erase("accessToken");
-                state_.erase("refreshToken");
-                state_.erase("accessTokenExpire");
-                environment_credentials_ = true;
-            } else if (!state_.get("accessToken", "").empty()) {
-                return;
-            }
+            if (!state_.get("accessToken", "").empty()) return;
             if (super_app_id_token.empty())
                 throw std::runtime_error(
                     "No eCard token and no Super App idToken; run 'app login <username>' first");
@@ -500,7 +440,6 @@ namespace zzu_assistant::ecard {
             state_.put("accessToken", data.get<std::string>("accessToken"));
             state_.put("refreshToken", data.get<std::string>("refreshToken"));
             state_.put("accessTokenExpire", data.get("accessTokenExpire", ""));
-            if (!environment_credentials_) save();
         }
 
         void refresh_access_token() {
@@ -525,7 +464,6 @@ namespace zzu_assistant::ecard {
             state_.put("accessToken", result.get<std::string>("accessToken"));
             state_.put("refreshToken", result.get("refreshToken", refresh));
             state_.put("accessTokenExpire", result.get("accessTokenExpire", ""));
-            if (!environment_credentials_) save();
         }
 
         ptree protected_post_body(const std::string_view target,
@@ -784,43 +722,36 @@ namespace zzu_assistant::ecard {
             put_path(air, profiles.air_conditioning);
             state_.put_child("profiles.lighting", lighting);
             state_.put_child("profiles.airConditioning", air);
-            save();
         }
 
-        void save() const {
-            std::error_code error;
-            std::filesystem::create_directories(file_.parent_path(), error);
-            if (error) throw std::runtime_error("Cannot create eCard state directory");
-            const std::filesystem::path temporary = file_.string() + ".tmp"; {
-                std::ofstream output(temporary, std::ios::trunc);
-                if (!output) throw std::runtime_error("Cannot save the eCard DB");
-                boost::property_tree::write_json(output, state_, true);
-            }
-#ifndef _WIN32
-        std::filesystem::permissions(
-                temporary,
-                std::filesystem::perms::owner_read |
-                        std::filesystem::perms::owner_write,
-                std::filesystem::perm_options::replace, error);
-        if (error) throw std::runtime_error("Cannot protect the eCard DB");
-#endif
-            std::filesystem::rename(temporary, file_, error);
-            if (error) {
-                std::filesystem::remove(file_, error);
-                error.clear();
-                std::filesystem::rename(temporary, file_, error);
-            }
-            if (error) throw std::runtime_error("Cannot replace the eCard DB");
+        Session session() const {
+            ElectricityProfiles profiles;
+            load_profiles(profiles);
+            return {username_, state_.get("accessToken", ""),
+                    state_.get("refreshToken", ""),
+                    state_.get("accessTokenExpire", ""), profiles};
+        }
+
+        void login(const Session &session) {
+            if (session.username.empty())
+                throw std::invalid_argument("Session username is required");
+            if (session.access_token.empty())
+                throw std::invalid_argument("Session access token is required");
+            username_ = session.username;
+            state_.clear();
+            state_.put("accessToken", session.access_token);
+            state_.put("refreshToken", session.refresh_token);
+            state_.put("accessTokenExpire", session.access_token_expire);
+            save_profiles(session.profiles);
         }
 
         ssl::context tls_;
         std::string username_;
-        std::filesystem::path file_;
         ptree state_;
-        bool environment_credentials_{false};
     };
 
-    EcardClient::EcardClient() : impl_(std::make_unique<Impl>()) {
+    EcardClient::EcardClient(NetworkOptions options)
+        : impl_(std::make_unique<Impl>(options)) {
     }
 
     EcardClient::~EcardClient() = default;
@@ -829,11 +760,11 @@ namespace zzu_assistant::ecard {
 
     EcardClient &EcardClient::operator=(EcardClient &&) noexcept = default;
 
-    void EcardClient::select_user(const std::string_view username) {
+    void EcardClient::login(const std::string_view username,
+                           const std::string_view token) {
         impl_->select_user(username);
+        impl_->authorize(token);
     }
-
-    void EcardClient::authorize(const std::string_view token) { impl_->authorize(token); }
 
     LocationPage EcardClient::locations(const std::string_view type,
                                         const LocationPath &path) {
@@ -866,4 +797,6 @@ namespace zzu_assistant::ecard {
     void EcardClient::save_profiles(const ElectricityProfiles &profiles) const {
         impl_->save_profiles(profiles);
     }
+    Session EcardClient::session() const { return impl_->session(); }
+    void EcardClient::login(const Session &session) { impl_->login(session); }
 } // namespace zzu_assistant::ecard

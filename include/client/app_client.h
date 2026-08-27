@@ -1,14 +1,19 @@
 #pragma once
 
+#include "client/options.h"
+
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 
-// New authentication client using the super app authentication method.
+// Super App authentication and account client.
 
 namespace zzu_assistant::app {
+    struct ClientOptions : NetworkOptions {
+        std::string device_id;
+    };
+
     struct LoginOptions {
         std::string_view username;
         std::string_view password;
@@ -21,9 +26,16 @@ namespace zzu_assistant::app {
         std::string message;
     };
 
+    struct Session {
+        std::string username;
+        std::string device_id;
+        std::string id_token;
+        std::string refresh_token;
+    };
+
     class AppClient final {
     public:
-        AppClient();
+        explicit AppClient(ClientOptions options = {});
 
         ~AppClient();
 
@@ -37,13 +49,15 @@ namespace zzu_assistant::app {
 
         [[nodiscard]] LoginResult login(const LoginOptions &options);
 
-        [[nodiscard]] LoginResult logout(std::string_view username = {});
+        [[nodiscard]] LoginResult logout();
 
-        [[nodiscard]] std::optional<std::string> current_user() const;
+        [[nodiscard]] std::string id_token() const;
 
-        [[nodiscard]] std::string id_token(std::string_view username) const;
+        [[nodiscard]] double card_balance() const;
 
-        [[nodiscard]] double card_balance(std::string_view username) const;
+        [[nodiscard]] Session session() const;
+
+        [[nodiscard]] LoginResult login(const Session &session);
 
     private:
         class Impl;

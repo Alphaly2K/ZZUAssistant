@@ -28,7 +28,9 @@ cmake --preset vcpkg-debug
 cmake --build --preset vcpkg-debug
 ```
 
-Release 使用 `vcpkg-release` preset。其他构建方式见 [BUILDING.md](BUILDING.md)。
+Release 使用 `vcpkg-release` preset。其他构建方式见 [BUILDING.md](BUILDING.md)，
+C++ 库接入见 [Client 库文档](docs/CLIENT_LIBRARY.md)，完整接口见
+[API 参考](docs/API.md)，其他语言调用见 [FFI 文档](docs/FFI.md)。
 
 ## 使用
 
@@ -67,24 +69,23 @@ ZZUAssistant _completions <powershell|bash|zsh|fish> install [配置路径]
 
 ## 环境变量
 
-| 变量 | 用途 |
-| --- | --- |
-| `ZZUASSISTANT_USER` | 当前操作用户 |
-| `ZZUASSISTANT_STATE_DIR` | 状态和会话目录 |
-| `ZZUASSISTANT_SSO_TOKEN` | CAS TGC 或 Cookie |
-| `ZZUASSISTANT_APP_TOKEN` | 超级 App `idToken` |
-| `ZZUASSISTANT_APP_DEVICE_ID` | 超级 App 设备 ID |
-| `ZZUASSISTANT_ECARD_TOKEN` | eCard access token |
-| `ZZUASSISTANT_ECARD_REFRESH_TOKEN` | eCard refresh token |
-| `ZZUASSISTANT_ECARD_PAYMENT_PASSWORD` | 静默电费充值密码 |
-| `ZZUASSISTANT_PYTHON` | Python 3 路径 |
-| `ZZUASSISTANT_TOOL_DIR` | Python 工具目录 |
-| `SSL_CERT_FILE` | CA 证书包 |
-| `NO_COLOR` | 禁用彩色输出 |
-| `VCPKG_ROOT` | vcpkg 目录 |
+| 变量                                    | 用途                  |
+|---------------------------------------|---------------------|
+| `ZZUASSISTANT_USER`                   | 当前操作用户              |
+| `ZZUASSISTANT_STATE_DIR`              | 状态和会话目录             |
+| `ZZUASSISTANT_SSO_TOKEN`              | CAS TGC 或 Cookie    |
+| `ZZUASSISTANT_APP_TOKEN`              | 超级 App `idToken`    |
+| `ZZUASSISTANT_APP_DEVICE_ID`          | 超级 App 设备 ID        |
+| `ZZUASSISTANT_ECARD_TOKEN`            | eCard access token  |
+| `ZZUASSISTANT_ECARD_REFRESH_TOKEN`    | eCard refresh token |
+| `ZZUASSISTANT_ECARD_PAYMENT_PASSWORD` | 静默电费充值密码            |
+| `ZZUASSISTANT_PYTHON`                 | Python 3 路径         |
+| `ZZUASSISTANT_TOOL_DIR`               | Python 工具目录         |
+| `SSL_CERT_FILE`                       | CA 证书包              |
+| `NO_COLOR`                            | 禁用彩色输出              |
+| `VCPKG_ROOT`                          | vcpkg 目录            |
 
-环境变量 token 只用于当前进程，不覆盖已保存的会话。不要将 token 或支付密码
-提交到版本控制。
+环境变量 token 只用于当前进程，不覆盖已保存的会话。
 
 ## 数据
 

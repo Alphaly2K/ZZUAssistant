@@ -3,6 +3,7 @@
 #include "client/ecard_client.h"
 #include "client/app_client.h"
 #include "service.h"
+#include "cli/session_store.h"
 
 namespace zzu_assistant::services {
     class ElectricityService final : public Service {
@@ -14,5 +15,6 @@ namespace zzu_assistant::services {
     private:
         ecard::EcardClient client_;
         app::AppClient app_state_;
+        cli::SessionStore sessions_;
     };
 } // namespace zzu_assistant::services

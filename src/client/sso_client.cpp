@@ -1,6 +1,5 @@
 #include "client/sso_client.h"
 
-#include "auth/environment.h"
 #include "model/sso.h"
 
 #include <boost/asio/connect.hpp>
@@ -23,8 +22,6 @@
 #include <chrono>
 #include <cctype>
 #include <cstdlib>
-#include <filesystem>
-#include <fstream>
 #include <format>
 #include <iomanip>
 #include <map>
@@ -181,11 +178,6 @@ namespace zzu_assistant::sso {
             return decoded;
         }
 
-        [[nodiscard]] std::optional<std::string> environment_variable(
-            const char *name) {
-            return auth::environment(name);
-        }
-
         [[nodiscard]] std::string ascii_lower(std::string value) {
             std::ranges::transform(value, value.begin(), [](const unsigned char ch) {
                 return static_cast<char>(std::tolower(ch));
@@ -204,112 +196,9 @@ namespace zzu_assistant::sso {
             return value;
         }
 
-        [[nodiscard]] std::filesystem::path state_directory() {
-            return auth::state_directory();
-        }
-
-        [[nodiscard]] std::string user_storage_key(const std::string_view username) {
-            unsigned char digest[EVP_MAX_MD_SIZE]{};
-            unsigned int digest_size = 0;
-            if (EVP_Digest(username.data(), username.size(), digest, &digest_size,
-                           EVP_sha256(), nullptr) != 1) {
-                throw std::runtime_error("Cannot derive the user Session DB key");
-            }
-            std::ostringstream output;
-            output << std::hex << std::setfill('0');
-            for (unsigned int index = 0; index < digest_size; ++index) {
-                output << std::setw(2) << static_cast<unsigned>(digest[index]);
-            }
-            return output.str();
-        }
-
-        [[nodiscard]] std::filesystem::path session_file_path(
-            const std::string_view username) {
-            return state_directory() / "sessions" /
-                   (user_storage_key(username) + ".db");
-        }
-
-        [[nodiscard]] std::filesystem::path current_user_file_path() {
-            return state_directory() / "current-user.db";
-        }
-
-        [[nodiscard]] std::optional<CachedUserInfo> read_current_user_info() {
-            std::ifstream input(current_user_file_path());
-            if (!input) {
-                return std::nullopt;
-            }
-            std::string header;
-            std::getline(input, header);
-            if (header != "ZZUAssistant-CurrentUser-v1") {
-                return std::nullopt;
-            }
-            CachedUserInfo info;
-            if (!(input >> std::quoted(info.username) >> std::quoted(info.final_url) >>
-                  info.updated_at) || info.username.empty()) {
-                return std::nullopt;
-            }
-            return info;
-        }
-
-        void save_current_user_info(const std::string_view username,
-                                    const std::string_view final_url) {
-            const std::filesystem::path file = current_user_file_path();
-            std::error_code error;
-            std::filesystem::create_directories(file.parent_path(), error);
-            if (error) {
-                throw std::runtime_error("Cannot create the user-state directory");
-            }
-            const std::filesystem::path temporary = file.string() + ".tmp"; {
-                std::ofstream output(temporary, std::ios::trunc);
-                if (!output) {
-                    throw std::runtime_error("Cannot persist the current user");
-                }
-                const auto updated_at = std::chrono::duration_cast<std::chrono::seconds>(
-                    std::chrono::system_clock::now().time_since_epoch()).count();
-                output << "ZZUAssistant-CurrentUser-v1\n"
-                        << std::quoted(std::string(username)) << ' '
-                        << std::quoted(std::string(final_url)) << ' '
-                        << updated_at << '\n';
-            }
-#ifndef _WIN32
-    std::filesystem::permissions(
-            temporary,
-            std::filesystem::perms::owner_read |
-                    std::filesystem::perms::owner_write,
-            std::filesystem::perm_options::replace, error);
-    if (error) {
-        std::filesystem::remove(temporary);
-        throw std::runtime_error("Cannot protect the current-user store");
-    }
-#endif
-            std::filesystem::rename(temporary, file, error);
-            if (error) {
-                std::filesystem::remove(file, error);
-                error.clear();
-                std::filesystem::rename(temporary, file, error);
-            }
-            if (error) {
-                throw std::runtime_error("Cannot replace the current-user store");
-            }
-        }
-
-        void clear_current_user_info(const std::string_view username) {
-            const auto current = read_current_user_info();
-            if (!current || current->username != username) {
-                return;
-            }
-            std::error_code error;
-            std::filesystem::remove(current_user_file_path(), error);
-            if (error) {
-                throw std::runtime_error("Cannot clear the current-user store");
-            }
-        }
-
         class CookieJar final {
         public:
-            explicit CookieJar(std::filesystem::path file) : file_(std::move(file)) {
-                load();
-            }
+            CookieJar() = default;
 
             [[nodiscard]] std::string header(const std::string_view host,
                                              const std::string_view target) const {
@@ -429,77 +318,30 @@ namespace zzu_assistant::sso {
                 }
             }
 
-            void save() const {
-                std::error_code error;
-                std::filesystem::create_directories(file_.parent_path(), error);
-                if (error) {
-                    throw std::runtime_error("Cannot create Cookie storage directory");
-                }
-                const std::filesystem::path temporary = file_.string() + ".tmp"; {
-                    std::ofstream output(temporary, std::ios::trunc);
-                    if (!output) {
-                        throw std::runtime_error("Cannot write the Cookie store");
-                    }
-                    output << "ZZUAssistant-Cookies-v1\n";
-                    for (const Cookie &cookie: cookies_) {
-                        output << std::quoted(cookie.name) << ' '
-                                << std::quoted(cookie.value) << ' '
-                                << std::quoted(cookie.domain) << ' '
-                                << std::quoted(cookie.path) << ' '
-                                << cookie.secure << ' ' << cookie.host_only << '\n';
-                    }
-                }
-#ifndef _WIN32
-        std::filesystem::permissions(
-                temporary,
-                std::filesystem::perms::owner_read |
-                        std::filesystem::perms::owner_write,
-                std::filesystem::perm_options::replace, error);
-        if (error) {
-            std::filesystem::remove(temporary);
-            throw std::runtime_error("Cannot protect the Cookie store");
-        }
-#endif
-                std::filesystem::rename(temporary, file_, error);
-                if (error) {
-                    std::filesystem::remove(file_, error);
-                    error.clear();
-                    std::filesystem::rename(temporary, file_, error);
-                }
-                if (error) {
-                    throw std::runtime_error("Cannot replace the Cookie store");
-                }
+            [[nodiscard]] std::string serialize() const {
+                std::ostringstream output;
+                for (const Cookie &cookie: cookies_)
+                    output << std::quoted(cookie.name) << ' '
+                           << std::quoted(cookie.value) << ' '
+                           << std::quoted(cookie.domain) << ' '
+                           << std::quoted(cookie.path) << ' '
+                           << cookie.secure << ' ' << cookie.host_only << '\n';
+                return output.str();
             }
 
-            void clear() {
+            void deserialize(const std::string_view data) {
                 cookies_.clear();
-                std::error_code error;
-                std::filesystem::remove(file_, error);
-                if (error) {
-                    throw std::runtime_error("Cannot remove the user Session DB");
-                }
-            }
-
-        private:
-            void load() {
-                std::ifstream input(file_);
-                if (!input) {
-                    return;
-                }
-                std::string header;
-                std::getline(input, header);
-                if (header != "ZZUAssistant-Cookies-v1") {
-                    return;
-                }
+                std::istringstream input{std::string(data)};
                 Cookie cookie;
                 while (input >> std::quoted(cookie.name) >> std::quoted(cookie.value) >>
                        std::quoted(cookie.domain) >> std::quoted(cookie.path) >>
-                       cookie.secure >> cookie.host_only) {
+                       cookie.secure >> cookie.host_only)
                     cookies_.push_back(cookie);
-                }
             }
 
-            std::filesystem::path file_;
+            void clear() { cookies_.clear(); }
+
+        private:
             std::vector<Cookie> cookies_;
         };
 
@@ -605,10 +447,9 @@ namespace zzu_assistant::sso {
 
     class SsoClient::Impl final {
     public:
-        Impl() : tls_(ssl::context::tls_client) {
-            if (const auto ca_file = environment_variable("SSL_CERT_FILE");
-                ca_file && !ca_file->empty()) {
-                tls_.load_verify_file(*ca_file);
+        explicit Impl(const NetworkOptions &options) : tls_(ssl::context::tls_client) {
+            if (!options.ca_file.empty()) {
+                tls_.load_verify_file(options.ca_file);
 #ifdef ZZU_DEFAULT_CA_FILE
             } else {
                 tls_.load_verify_file(ZZU_DEFAULT_CA_FILE);
@@ -622,13 +463,16 @@ namespace zzu_assistant::sso {
 
         void select_user(const std::string_view username) {
             if (username.empty()) {
-                throw std::runtime_error("A username is required for Session DB access");
+                throw std::runtime_error("A username is required");
             }
             if (cookies_ && active_username_ == username) {
                 return;
             }
             active_username_ = std::string(username);
-            cookies_ = std::make_unique<CookieJar>(session_file_path(username));
+            cookies_ = std::make_unique<CookieJar>();
+            final_url_.clear();
+            updated_at_ = 0;
+            cas_cookie_.clear();
         }
 
         [[nodiscard]] HttpResponse request(
@@ -677,12 +521,8 @@ namespace zzu_assistant::sso {
                                                       ? cookies_->header(parsed.host, parsed.target)
                                                       : std::string{};
                 if (parsed.host == "cas.s.zzu.edu.cn") {
-                    if (const auto token = auth::environment(auth::SSO_TOKEN_ENV)) {
-                        auth::validate_header_value(*token, auth::SSO_TOKEN_ENV);
-                        request.set(http::field::cookie,
-                                    token->find('=') == std::string::npos
-                                        ? "TGC=" + *token
-                                        : *token);
+                    if (!cas_cookie_.empty()) {
+                        request.set(http::field::cookie, cas_cookie_);
                     } else if (!cookie_header.empty()) {
                         request.set(http::field::cookie, cookie_header);
                     }
@@ -735,17 +575,30 @@ namespace zzu_assistant::sso {
             throw std::runtime_error("Too many SSO redirects");
         }
 
-        void save_cookies() const {
-            if (!cookies_) {
-                throw std::runtime_error("No user Session DB is selected");
-            }
-            cookies_->save();
-        }
-
         void clear_cookies() {
             if (cookies_) {
                 cookies_->clear();
             }
+        }
+
+        [[nodiscard]] Session session() const {
+            return {active_username_, final_url_, updated_at_,
+                    cookies_ ? cookies_->serialize() : std::string{}, cas_cookie_};
+        }
+
+        void login(const Session &session) {
+            active_username_ = session.username;
+            final_url_ = session.final_url;
+            updated_at_ = session.updated_at;
+            cas_cookie_ = session.cas_cookie;
+            cookies_ = std::make_unique<CookieJar>();
+            cookies_->deserialize(session.cookies);
+        }
+
+        void mark_authenticated(const std::string_view final_url) {
+            final_url_ = final_url;
+            updated_at_ = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
         }
 
         [[nodiscard]] std::vector<unsigned char> qr_image(
@@ -774,9 +627,13 @@ namespace zzu_assistant::sso {
         ssl::context tls_;
         std::string active_username_;
         std::unique_ptr<CookieJar> cookies_;
+        std::string final_url_;
+        std::int64_t updated_at_{};
+        std::string cas_cookie_;
     };
 
-    SsoClient::SsoClient() : impl_(std::make_unique<Impl>()) {
+    SsoClient::SsoClient(NetworkOptions options)
+        : impl_(std::make_unique<Impl>(options)) {
     }
 
     SsoClient::~SsoClient() = default;
@@ -815,14 +672,11 @@ namespace zzu_assistant::sso {
         }
     }
 
-    LoginResult SsoClient::resume(const std::string_view username,
-                                  const std::string_view service_url) {
+    LoginResult SsoClient::resume(const std::string_view service_url) {
         try {
-            const bool transient_credentials =
-                    auth::environment(auth::SSO_TOKEN_ENV).has_value();
-            const bool transient_user =
-                    auth::current_user_override().has_value();
-            impl_->select_user(username);
+            if (impl_->session().username.empty())
+                return {LoginStatus::no_session,
+                        "SSO client is not logged in", {}};
             std::string login_url(model::sso::LOGIN_URL);
             if (!service_url.empty()) {
                 login_url += "?service=" + url_encode(service_url);
@@ -842,9 +696,7 @@ namespace zzu_assistant::sso {
                     "No active cached SSO session", response.final_url
                 };
             }
-            if (!transient_credentials) impl_->save_cookies();
-            if (!transient_credentials && !transient_user)
-                save_current_user_info(username, response.final_url);
+            impl_->mark_authenticated(response.final_url);
             return {
                 LoginStatus::success, "Cached SSO session restored",
                 response.final_url
@@ -863,10 +715,6 @@ namespace zzu_assistant::sso {
                 };
             }
 
-            const bool transient_credentials =
-                    auth::environment(auth::SSO_TOKEN_ENV).has_value();
-            const bool transient_user =
-                    auth::current_user_override().has_value();
             impl_->select_user(options.username);
 
             std::string login_url(model::sso::LOGIN_URL);
@@ -882,9 +730,7 @@ namespace zzu_assistant::sso {
                 };
             }
             if (page.body.find("name=\"execution\"") == std::string::npos) {
-                if (!transient_credentials) impl_->save_cookies();
-                if (!transient_credentials && !transient_user)
-                    save_current_user_info(options.username, page.final_url);
+                impl_->mark_authenticated(page.final_url);
                 return {
                     LoginStatus::success, "Existing SSO session is active",
                     page.final_url
@@ -1110,14 +956,10 @@ namespace zzu_assistant::sso {
                     submitted.final_url
                 };
             }
-            if (!transient_credentials) impl_->save_cookies();
-            if (!transient_credentials && !transient_user)
-                save_current_user_info(options.username, submitted.final_url);
+            impl_->mark_authenticated(submitted.final_url);
             return {
                 LoginStatus::success,
-                transient_credentials
-                    ? "SSO login succeeded for this process"
-                    : "SSO login succeeded; Cookie saved",
+                "SSO login succeeded",
                 submitted.final_url
             };
         } catch (const boost::property_tree::json_parser::json_parser_error &error) {
@@ -1130,25 +972,20 @@ namespace zzu_assistant::sso {
         }
     }
 
-    LoginResult SsoClient::logout(std::string_view username) {
-        std::string selected_username(username);
+    LoginResult SsoClient::logout() {
+        std::string selected_username;
         try {
-            if (selected_username.empty()) {
-                const auto current = read_current_user_info();
-                if (!current) {
-                    return {
-                        LoginStatus::no_session,
-                        "No persisted user is currently logged in", {}
-                    };
-                }
-                selected_username = current->username;
+            const auto current = impl_->session();
+            if (current.username.empty()) {
+                return {
+                    LoginStatus::no_session,
+                    "SSO client is not logged in", {}
+                };
             }
-
-            impl_->select_user(selected_username);
+            selected_username = current.username;
             const HttpResponse response = impl_->request(
                 "GET", std::string(model::sso::LOGOUT_URL));
             impl_->clear_cookies();
-            clear_current_user_info(selected_username);
             if (response.status >= 400) {
                 return {
                     LoginStatus::network_error,
@@ -1160,31 +997,33 @@ namespace zzu_assistant::sso {
             }
             return {
                 LoginStatus::success,
-                "CAS session and local Session DB cleared", response.final_url
+                "CAS session cleared", response.final_url
             };
         } catch (const std::exception &error) {
-            // A network outage must not prevent the user from discarding local
-            // credentials. Only the exact selected user's hashed DB is touched.
             if (!selected_username.empty()) {
                 try {
                     impl_->select_user(selected_username);
                     impl_->clear_cookies();
-                    clear_current_user_info(selected_username);
                 } catch (...) {
                 }
             }
             return {
                 LoginStatus::network_error,
-                std::string("Local session cleared; remote CAS logout failed: ") +
+                std::string("Session cleared; remote CAS logout failed: ") +
                 error.what(),
                 {}
             };
         }
     }
 
-    std::optional<CachedUserInfo> SsoClient::current_user() const {
-        if (const auto configured = auth::current_user_override())
-            return CachedUserInfo{.username = *configured};
-        return read_current_user_info();
+    LoginResult SsoClient::login(const Session &session) {
+        if (session.username.empty())
+            return {LoginStatus::protocol_error, "Session username is required", {}};
+        if (session.cookies.empty() && session.cas_cookie.empty())
+            return {LoginStatus::no_session, "Session credentials are required", {}};
+        impl_->login(session);
+        return {LoginStatus::success, "SSO session restored", session.final_url};
     }
+
+    Session SsoClient::session() const { return impl_->session(); }
 } // namespace zzu_assistant::sso

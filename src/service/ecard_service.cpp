@@ -2,6 +2,7 @@
 
 #include "cli/console.h"
 #include "cli/qr_renderer.h"
+#include "auth/environment.h"
 
 #include <cmath>
 #include <format>
@@ -30,15 +31,9 @@ namespace zzu_assistant::services {
                     << "  --porcelain   Print key=value output.\n\n";
         }
 
-        std::string resolve_username(app::AppClient &state,
+        std::string resolve_username(cli::SessionStore &sessions,
                                      const std::string_view supplied) {
-            if (!supplied.empty()) return std::string(supplied);
-            const auto current = state.current_user();
-            if (!current) {
-                throw std::runtime_error(
-                    "No current Super App user; run 'app login <username>' first");
-            }
-            return *current;
+            return auth::resolve_username(supplied, sessions.current_user("app"), "App");
         }
     } // namespace
 
@@ -47,6 +42,8 @@ namespace zzu_assistant::services {
     }
 
     int EcardService::execute(ServiceContext &context, Arguments arguments) {
+        app_state_ = app::AppClient(cli::SessionStore::app_options());
+        client_ = ecard::EcardClient(cli::SessionStore::network_options());
         if (arguments.empty() || arguments.front() == "--help" ||
             arguments.front() == "-h") {
             usage(context);
@@ -109,9 +106,14 @@ namespace zzu_assistant::services {
                                                            : (positionals.empty()
                                                                   ? std::string_view{}
                                                                   : positionals[0]);
-            const std::string username = resolve_username(
-                app_state_, supplied_username);
-            const double balance = app_state_.card_balance(username);
+            const std::string username = resolve_username(sessions_, supplied_username);
+            const auto app_session = sessions_.load_app(username);
+            if (!app_session) throw std::runtime_error(
+                "No Super App session; run 'app login <username>' first");
+            static_cast<void>(app_state_.login(*app_session));
+            if (const auto ecard_session = sessions_.load_ecard(username))
+                client_.login(*ecard_session);
+            const double balance = app_state_.card_balance();
             if (!std::isfinite(balance) || balance < 0)
                 throw std::runtime_error("Campus card balance response is invalid");
             if (command == "balance") {
@@ -129,7 +131,6 @@ namespace zzu_assistant::services {
                 return 0;
             }
 
-            client_.select_user(username);
             if (!porcelain) {
                 cli::heading(context.out, "Campus card", "Recharge order",
                              context.color_enabled);
@@ -139,7 +140,8 @@ namespace zzu_assistant::services {
                             "Authorizing eCard for " + username,
                             cli::Tone::cyan, context.color_enabled);
             }
-            client_.authorize(app_state_.id_token(username));
+            client_.login(username, app_state_.id_token());
+            sessions_.save(client_.session());
             const auto config = client_.campus_card_recharge_config();
             if (config.amounts_yuan.empty())
                 throw std::runtime_error(
@@ -183,6 +185,7 @@ namespace zzu_assistant::services {
 
             const auto order = client_.campus_card_recharge(
                 static_cast<unsigned>(amount));
+            sessions_.save(client_.session());
             if (porcelain) {
                 context.out << std::format("balance_yuan={:.2f}\n", balance)
                         << "amount_yuan=" << order.amount_yuan << '\n'

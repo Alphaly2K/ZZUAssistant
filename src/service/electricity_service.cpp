@@ -1,6 +1,7 @@
 #include "service/electricity_service.h"
 
 #include "cli/console.h"
+#include "auth/environment.h"
 
 #include <openssl/crypto.h>
 #ifdef _WIN32
@@ -47,15 +48,9 @@ namespace zzu_assistant::services {
                     << "  --porcelain                   Print key=value output.\n\n";
         }
 
-        std::string resolve_username(app::AppClient &state,
+        std::string resolve_username(cli::SessionStore &sessions,
                                      const std::string_view supplied = {}) {
-            if (!supplied.empty()) return std::string(supplied);
-            const auto current = state.current_user();
-            if (!current) {
-                throw std::runtime_error(
-                    "No current Super App user; provide a username or run 'app login' first");
-            }
-            return *current;
+            return auth::resolve_username(supplied, sessions.current_user("app"), "App");
         }
 
         std::string hidden_payment_password(std::ostream &output,
@@ -237,6 +232,8 @@ namespace zzu_assistant::services {
     }
 
     int ElectricityService::execute(ServiceContext &context, Arguments arguments) {
+        app_state_ = app::AppClient(cli::SessionStore::app_options());
+        client_ = ecard::EcardClient(cli::SessionStore::network_options());
         if (arguments.empty() || arguments.front() == "--help" ||
             arguments.front() == "-h") {
             usage(context);
@@ -307,7 +304,7 @@ namespace zzu_assistant::services {
                         "Amount must be an integer from 1 to 1000 yuan");
                 if (assume_yes && !payment_password_environment)
                     payment_password_environment = std::string(
-                        ecard::PAYMENT_PASSWORD_ENVIRONMENT);
+                        auth::ECARD_PAYMENT_PASSWORD_ENV);
             }
 
             const std::string_view supplied_username = recharge
@@ -317,9 +314,14 @@ namespace zzu_assistant::services {
                                                            : (positionals.empty()
                                                                   ? std::string_view{}
                                                                   : positionals[0]);
-            const std::string username = resolve_username(app_state_, supplied_username);
+            const std::string username = resolve_username(sessions_, supplied_username);
+            const auto app_session = sessions_.load_app(username);
+            if (!app_session) throw std::runtime_error(
+                "No Super App session; run 'app login <username>' first");
+            static_cast<void>(app_state_.login(*app_session));
+            if (const auto ecard_session = sessions_.load_ecard(username))
+                client_.login(*ecard_session);
 
-            client_.select_user(username);
             if (!porcelain) {
                 const std::string_view subtitle = recharge ? "Recharge" :
                                                   command == "show" ? "Balance" :
@@ -331,7 +333,8 @@ namespace zzu_assistant::services {
                 cli::status(context.out, "INFO", "Authorizing eCard for " + username,
                             cli::Tone::cyan, context.color_enabled);
             }
-            client_.authorize(app_state_.id_token(username));
+            client_.login(username, app_state_.id_token());
+            sessions_.save(client_.session());
 
             if (recharge) {
                 ecard::ElectricityProfiles profiles;
@@ -340,7 +343,7 @@ namespace zzu_assistant::services {
                 const ecard::LocationPath &profile = meter == "lighting"
                                                          ? profiles.lighting
                                                          : profiles.air_conditioning;
-                const double card_balance = app_state_.card_balance(username);
+                const double card_balance = app_state_.card_balance();
                 if (!std::isfinite(card_balance) || card_balance < 0)
                     throw std::runtime_error("Campus card balance response is invalid");
                 const auto before = client_.account(profile);
@@ -388,6 +391,7 @@ namespace zzu_assistant::services {
                     const auto result = client_.recharge(
                         profile, payment_password, static_cast<unsigned>(amount));
                     OPENSSL_cleanse(payment_password.data(), payment_password.size());
+                    sessions_.save(client_.session());
                     cli::status(result.success ? context.out : context.err,
                                 result.success ? "OK" : "ERROR", result.message,
                                 result.success ? cli::Tone::green : cli::Tone::red,
@@ -446,6 +450,7 @@ namespace zzu_assistant::services {
                 return 2;
             }
             client_.save_profiles(profiles);
+            sessions_.save(client_.session());
             cli::status(context.out, "OK",
                         "Lighting and air-conditioning profiles saved",
                         cli::Tone::green, context.color_enabled);

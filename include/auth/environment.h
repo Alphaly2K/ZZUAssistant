@@ -15,6 +15,8 @@ namespace zzu_assistant::auth {
     inline constexpr std::string_view ECARD_TOKEN_ENV = "ZZUASSISTANT_ECARD_TOKEN";
     inline constexpr std::string_view ECARD_REFRESH_TOKEN_ENV =
             "ZZUASSISTANT_ECARD_REFRESH_TOKEN";
+    inline constexpr std::string_view ECARD_PAYMENT_PASSWORD_ENV =
+            "ZZUASSISTANT_ECARD_PAYMENT_PASSWORD";
 
     [[nodiscard]] inline std::optional<std::string> environment(
         const std::string_view name) {

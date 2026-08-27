@@ -1,6 +1,5 @@
 #include "client/portal_client.h"
 
-#include "auth/environment.h"
 #include "model/portal.h"
 
 #include <boost/asio/connect.hpp>
@@ -22,8 +21,6 @@
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
-#include <filesystem>
-#include <fstream>
 #include <format>
 #include <iomanip>
 #include <random>
@@ -54,50 +51,6 @@ namespace zzu_assistant::portal {
             std::string body;
             std::string final_url;
         };
-
-        std::optional<std::string> environment(const char *name) {
-            return auth::environment(name);
-        }
-
-        std::filesystem::path portal_session_file() {
-            return auth::state_directory() / "current-portal-user.db";
-        }
-
-        void save_portal_session(const CachedSession &session) {
-            const auto file = portal_session_file();
-            std::error_code error;
-            std::filesystem::create_directories(file.parent_path(), error);
-            if (error) throw std::runtime_error("Cannot create the Portal state directory");
-            std::ofstream output(file, std::ios::trunc);
-            if (!output) throw std::runtime_error("Cannot save the current Portal user");
-            output << "ZZUAssistant-PortalUser-v1\n"
-                    << std::quoted(session.username) << ' '
-                    << std::quoted(session.server_url) << ' '
-                    << std::quoted(session.user_ip) << ' '
-                    << std::quoted(session.isp_suffix) << '\n';
-        }
-
-        std::optional<CachedSession> load_portal_session() {
-            std::ifstream input(portal_session_file());
-            std::string header;
-            CachedSession session;
-            if (!input || !std::getline(input, header) ||
-                header != "ZZUAssistant-PortalUser-v1" ||
-                !(input >> std::quoted(session.username)
-                  >> std::quoted(session.server_url)
-                  >> std::quoted(session.user_ip)
-                  >> std::quoted(session.isp_suffix)) ||
-                session.username.empty())
-                return std::nullopt;
-            return session;
-        }
-
-        void clear_portal_session(const std::string_view username) {
-            const auto current = load_portal_session();
-            if (!current || current->username != username) return;
-            std::error_code error;
-            std::filesystem::remove(portal_session_file(), error);
-        }
 
         ParsedUrl parse_url(const std::string_view url) {
             const std::size_t scheme_end = url.find("://");
@@ -268,11 +221,13 @@ namespace zzu_assistant::portal {
 
     class PortalClient::Impl final {
     public:
-        Impl() : tls_(ssl::context::tls_client) {
+        explicit Impl(const NetworkOptions &options) : tls_(ssl::context::tls_client) {
+            if (!options.ca_file.empty()) {
+                tls_.load_verify_file(options.ca_file);
 #ifdef ZZU_DEFAULT_CA_FILE
-            tls_.load_verify_file(ZZU_DEFAULT_CA_FILE);
+            } else tls_.load_verify_file(ZZU_DEFAULT_CA_FILE);
 #else
-        tls_.set_default_verify_paths();
+            } else tls_.set_default_verify_paths();
 #endif
             tls_.set_verify_mode(ssl::verify_peer);
         }
@@ -375,7 +330,8 @@ namespace zzu_assistant::portal {
         std::string redirect_location_;
     };
 
-    PortalClient::PortalClient() : impl_(std::make_unique<Impl>()) {
+    PortalClient::PortalClient(NetworkOptions options)
+        : impl_(std::make_unique<Impl>(options)) {
     }
 
     PortalClient::~PortalClient() = default;
@@ -446,7 +402,7 @@ namespace zzu_assistant::portal {
         return {auth_url, server_url, user_ip};
     }
 
-    AuthResult PortalClient::authenticate(const AuthOptions &options) {
+    AuthResult PortalClient::login(const AuthOptions &options) {
         if (options.server_url.empty() || options.username.empty() ||
             options.password.empty()) {
             throw std::runtime_error("Portal server, username and password are required");
@@ -511,16 +467,20 @@ namespace zzu_assistant::portal {
             result.return_code = *code;
         }
         if (result.success) {
-            save_portal_session({
+            session_ = Session{
                 std::string(options.username),
                 std::string(options.server_url), ip,
                 std::string(options.isp_suffix)
-            });
+            };
         }
         return result;
     }
 
-    AuthResult PortalClient::logout(const LogoutOptions &options) {
+    AuthResult PortalClient::logout() {
+        if (!session_)
+            return {false, 0, std::nullopt,
+                    "Portal client is not logged in"};
+        const Session &options = *session_;
         if (options.server_url.empty() || options.username.empty())
             throw std::runtime_error("Portal server and username are required");
         const std::string ip = options.user_ip.empty()
@@ -564,11 +524,18 @@ namespace zzu_assistant::portal {
             result.return_code = *code;
         else if (const auto code = root.get_optional<int>("retCode"))
             result.return_code = *code;
-        if (result.success) clear_portal_session(options.username);
+        if (result.success) session_.reset();
         return result;
     }
 
-    std::optional<CachedSession> PortalClient::current_session() const {
-        return load_portal_session();
+    std::optional<Session> PortalClient::session() const {
+        return session_;
+    }
+
+    void PortalClient::login(const Session &session) {
+        if (session.username.empty() || session.server_url.empty())
+            throw std::invalid_argument(
+                "Portal session username and server URL are required");
+        session_ = session;
     }
 } // namespace zzu_assistant::portal
